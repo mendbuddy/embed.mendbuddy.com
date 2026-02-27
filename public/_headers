@@ -1,0 +1,10 @@
+/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600, s-maxage=86400
+  X-Content-Type-Options: nosniff
+
+/v1/chat.js
+  Content-Type: application/javascript; charset=utf-8
+
+/mendbuddy-chat-widget.js
+  Content-Type: application/javascript; charset=utf-8

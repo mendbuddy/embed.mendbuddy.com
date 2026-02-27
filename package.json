@@ -1,0 +1,18 @@
+{
+  "name": "@mendbuddy/chat-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MendBuddy Chat Widget SDK",
+  "main": "dist/chat.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "dependencies": {
+    "preact": "^10.19.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3"
+  }
+}
