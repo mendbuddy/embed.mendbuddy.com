@@ -3,7 +3,7 @@
 // ============================================================================
 
 export type EmbedTheme = 'light' | 'dark' | 'auto';
-export type EmbedPosition = 'bottom-right' | 'bottom-left';
+export type EmbedPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 export type EmbedButtonIcon = 'chat' | 'message' | 'help' | 'custom';
 
 export interface PreChatField {
@@ -47,6 +47,17 @@ export interface EmbedConfigPublic {
   business_hours_enabled: boolean;
   business_hours: BusinessHours | null;
   is_online: boolean;
+  assistant_name: string;
+  default_messages: string[];
+  user_bg_color: string;
+  assistant_bg_color: string;
+  button_color: string;
+  window_width: string;
+  window_height: string;
+  text_size: string;
+  brand_image_url: string | null;
+  chat_icon: string;
+  widget_position: string;
 }
 
 export interface Message {

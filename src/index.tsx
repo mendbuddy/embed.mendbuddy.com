@@ -49,7 +49,6 @@ function init(config: MendBuddyConfig): void {
     <Widget
       embedId={config.embedId}
       apiUrl={config.apiUrl || API_BASE_URL}
-      position={config.position || 'bottom-right'}
       autoOpen={config.autoOpen || false}
       onReady={config.onReady}
       onOpen={config.onOpen}
@@ -147,7 +146,6 @@ function getStyles(): string {
     /* ========== Chat Button ========== */
     .mb-button {
       position: fixed;
-      bottom: 20px;
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -171,14 +169,6 @@ function getStyles(): string {
       transform: scale(0.98);
     }
 
-    .mb-button.right {
-      right: 20px;
-    }
-
-    .mb-button.left {
-      left: 20px;
-    }
-
     .mb-button svg {
       width: 28px;
       height: 28px;
@@ -188,10 +178,6 @@ function getStyles(): string {
     /* ========== Chat Window ========== */
     .mb-window {
       position: fixed;
-      bottom: 90px;
-      width: 380px;
-      height: 600px;
-      max-height: calc(100vh - 110px);
       border-radius: 16px;
       background: white;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
@@ -209,14 +195,6 @@ function getStyles(): string {
       opacity: 1;
       transform: translateY(0) scale(1);
       pointer-events: auto;
-    }
-
-    .mb-window.right {
-      right: 20px;
-    }
-
-    .mb-window.left {
-      left: 20px;
     }
 
     /* ========== Header ========== */
@@ -300,16 +278,26 @@ function getStyles(): string {
     /* ========== Single Message ========== */
     .mb-message {
       display: flex;
-      flex-direction: column;
       max-width: 85%;
+      gap: 8px;
+      align-items: flex-end;
     }
 
     .mb-message.user {
       align-self: flex-end;
+      flex-direction: row-reverse;
     }
 
     .mb-message.assistant {
       align-self: flex-start;
+    }
+
+    .mb-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
     }
 
     .mb-message-bubble {
@@ -320,13 +308,10 @@ function getStyles(): string {
     }
 
     .mb-message.user .mb-message-bubble {
-      color: white;
       border-bottom-right-radius: 4px;
     }
 
     .mb-message.assistant .mb-message-bubble {
-      background: white;
-      color: #333;
       border-bottom-left-radius: 4px;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
@@ -347,6 +332,30 @@ function getStyles(): string {
 
     .mb-source {
       margin-top: 2px;
+    }
+
+    /* ========== Suggested Messages ========== */
+    .mb-suggested {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 16px;
+    }
+
+    .mb-suggested-chip {
+      padding: 6px 12px;
+      border: 1px solid;
+      border-radius: 16px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .mb-suggested-chip:hover {
+      background: var(--chip-hover-bg, var(--primary-color));
+      color: white !important;
     }
 
     /* ========== Typing Indicator ========== */
@@ -561,12 +570,13 @@ function getStyles(): string {
 
     /* ========== Powered By ========== */
     .mb-powered {
-      padding: 8px;
+      padding: 8px 12px;
       text-align: center;
       font-size: 11px;
       color: #999;
       background: white;
       border-top: 1px solid #eee;
+      line-height: 1.4;
     }
 
     .mb-powered a {
@@ -581,33 +591,19 @@ function getStyles(): string {
     /* ========== Mobile Responsive ========== */
     @media (max-width: 480px) {
       .mb-window {
-        bottom: 0;
-        right: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        max-height: 100%;
+        bottom: 0 !important;
+        top: 0 !important;
+        right: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
         border-radius: 0;
       }
 
-      .mb-window.left,
-      .mb-window.right {
-        right: 0;
-        left: 0;
-      }
-
       .mb-button {
-        bottom: 16px;
         width: 56px;
         height: 56px;
-      }
-
-      .mb-button.right {
-        right: 16px;
-      }
-
-      .mb-button.left {
-        left: 16px;
       }
     }
   `;

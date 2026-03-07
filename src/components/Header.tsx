@@ -5,7 +5,8 @@
 import { h } from 'preact';
 
 interface HeaderProps {
-  title?: string;
+  assistantName: string;
+  brandImageUrl?: string | null;
   logoUrl?: string | null;
   isOnline: boolean;
   primaryColor: string;
@@ -19,19 +20,22 @@ const CloseIcon = () => (
 );
 
 export function Header({
-  title = 'Chat',
+  assistantName,
+  brandImageUrl,
   logoUrl,
   isOnline,
   primaryColor,
   onClose,
 }: HeaderProps) {
+  const headerLogo = brandImageUrl || logoUrl;
+
   return (
     <div class="mb-header" style={{ borderBottomColor: `${primaryColor}20` }}>
-      {logoUrl && (
-        <img src={logoUrl} alt="" class="mb-header-logo" />
+      {headerLogo && (
+        <img src={headerLogo} alt="" class="mb-header-logo" />
       )}
       <div class="mb-header-info">
-        <div class="mb-header-title">{title}</div>
+        <div class="mb-header-title">{assistantName || 'AI Assistant'}</div>
         <div class="mb-header-status">
           <span
             class="mb-status-dot"

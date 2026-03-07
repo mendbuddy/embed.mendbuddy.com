@@ -12,7 +12,6 @@ import { useConfig } from './hooks/useConfig';
 interface WidgetProps {
   embedId: string;
   apiUrl: string;
-  position: 'bottom-right' | 'bottom-left';
   autoOpen: boolean;
   onReady?: () => void;
   onOpen?: () => void;
@@ -23,7 +22,6 @@ interface WidgetProps {
 export function Widget({
   embedId,
   apiUrl,
-  position,
   autoOpen,
   onReady,
   onOpen,
@@ -106,8 +104,6 @@ export function Widget({
     return <Fragment />;
   }
 
-  const positionClass = position === 'bottom-left' ? 'left' : 'right';
-
   return (
     <div
       class="mb-widget"
@@ -116,14 +112,12 @@ export function Widget({
       <ChatButton
         onClick={handleToggle}
         isOpen={isOpen}
-        position={positionClass}
-        primaryColor={config.primary_color}
-        icon={config.button_icon}
-        customIconUrl={config.custom_icon_url}
+        buttonColor={config.button_color || config.primary_color}
+        chatIcon={config.chat_icon || 'chat-circle-dots'}
+        widgetPosition={config.widget_position || 'bottom-right'}
       />
       <ChatWindow
         isOpen={isOpen}
-        position={positionClass}
         config={config}
         chat={chat}
         onClose={handleClose}

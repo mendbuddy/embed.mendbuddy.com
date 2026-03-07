@@ -12,15 +12,20 @@ import { PoweredBy } from './PoweredBy';
 
 interface ChatWindowProps {
   isOpen: boolean;
-  position: 'left' | 'right';
   config: EmbedConfigPublic;
   chat: UseChatReturn;
   onClose: () => void;
 }
 
+const WINDOW_POSITIONS: Record<string, Record<string, string>> = {
+  'bottom-right': { bottom: '90px', right: '20px' },
+  'bottom-left': { bottom: '90px', left: '20px' },
+  'top-right': { top: '90px', right: '20px' },
+  'top-left': { top: '90px', left: '20px' },
+};
+
 export function ChatWindow({
   isOpen,
-  position,
   config,
   chat,
   onClose,
@@ -32,9 +37,21 @@ export function ChatWindow({
 
   const showOffline = config.business_hours_enabled && !config.is_online;
 
+  const posStyle = WINDOW_POSITIONS[config.widget_position] || WINDOW_POSITIONS['bottom-right'];
+
+  const windowStyle = {
+    width: config.window_width || '380px',
+    height: config.window_height || '600px',
+    maxHeight: 'calc(100vh - 110px)',
+    fontSize: config.text_size || '14px',
+    ...posStyle,
+  };
+
   return (
-    <div class={`mb-window ${position} ${isOpen ? 'open' : ''}`}>
+    <div class={`mb-window ${isOpen ? 'open' : ''}`} style={windowStyle}>
       <Header
+        assistantName={config.assistant_name}
+        brandImageUrl={config.brand_image_url}
         logoUrl={config.logo_url}
         isOnline={config.is_online}
         primaryColor={config.primary_color}
@@ -64,6 +81,11 @@ export function ChatWindow({
             isStreaming={chat.isStreaming}
             welcomeMessage={config.welcome_message}
             primaryColor={config.primary_color}
+            userBgColor={config.user_bg_color || config.primary_color}
+            assistantBgColor={config.assistant_bg_color || '#ffffff'}
+            logoUrl={config.logo_url}
+            defaultMessages={config.default_messages || []}
+            onSuggestedSelect={chat.sendMessage}
           />
           <MessageInput
             onSend={chat.sendMessage}
