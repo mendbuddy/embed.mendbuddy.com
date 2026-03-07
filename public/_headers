@@ -1,6 +1,6 @@
 /*
   Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=3600, s-maxage=86400
+  Cache-Control: public, max-age=300, s-maxage=300
   X-Content-Type-Options: nosniff
 
 /v1/chat.js
