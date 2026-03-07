@@ -10,12 +10,14 @@ interface UseConfigReturn {
   config: EmbedConfigPublic | null;
   loading: boolean;
   error: string | null;
+  errorCode: string | null;
 }
 
 export function useConfig(apiUrl: string, embedId: string): UseConfigReturn {
   const [config, setConfig] = useState<EmbedConfigPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const clientRef = useRef<ApiClient | null>(null);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function useConfig(apiUrl: string, embedId: string): UseConfigReturn {
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Failed to load config');
+          setErrorCode((err as any)?.code || null);
         }
       } finally {
         if (mounted) {
@@ -52,5 +55,5 @@ export function useConfig(apiUrl: string, embedId: string): UseConfigReturn {
     };
   }, [apiUrl, embedId]);
 
-  return { config, loading, error };
+  return { config, loading, error, errorCode };
 }

@@ -29,7 +29,7 @@ export function Widget({
   onMessage,
 }: WidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { config, loading: configLoading, error: configError } = useConfig(apiUrl, embedId);
+  const { config, loading: configLoading, error: configError, errorCode: configErrorCode } = useConfig(apiUrl, embedId);
   const chat = useChat(apiUrl, embedId, config);
 
   // Handle auto-open
@@ -96,6 +96,11 @@ export function Widget({
 
   // Don't render if loading or config failed
   if (configLoading) {
+    return <Fragment />;
+  }
+
+  if (configErrorCode === 'DOMAIN_NOT_ALLOWED') {
+    console.warn('MendBuddy Chat: This chat widget is not configured for this website.');
     return <Fragment />;
   }
 
