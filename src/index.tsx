@@ -359,18 +359,11 @@ function getStyles(): string {
     }
 
     /* ========== Typing Indicator ========== */
-    .mb-message.typing {
-      align-self: flex-start;
-    }
-
-    .mb-message.typing .mb-message-bubble {
-      background: white;
-      padding: 16px 20px;
-    }
-
     .mb-typing-dots {
       display: flex;
       gap: 4px;
+      align-items: center;
+      height: 20px;
     }
 
     .mb-typing-dots span {

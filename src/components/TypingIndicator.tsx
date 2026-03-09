@@ -1,16 +1,29 @@
 // ============================================================================
-// Typing Indicator Component - Shows "..." animation
+// Typing Indicator Component - Shows "..." animation in a message bubble
 // ============================================================================
 
 import { h } from 'preact';
 
-export function TypingIndicator() {
+interface TypingIndicatorProps {
+  assistantBgColor: string;
+  logoUrl?: string | null;
+}
+
+export function TypingIndicator({ assistantBgColor, logoUrl }: TypingIndicatorProps) {
   return (
-    <div class="mb-message typing">
-      <div class="mb-typing-dots">
-        <span />
-        <span />
-        <span />
+    <div class="mb-message assistant typing">
+      {logoUrl && (
+        <img src={logoUrl} alt="" class="mb-avatar" />
+      )}
+      <div
+        class="mb-message-bubble"
+        style={{ backgroundColor: assistantBgColor }}
+      >
+        <div class="mb-typing-dots">
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
     </div>
   );

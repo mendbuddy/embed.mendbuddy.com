@@ -65,7 +65,7 @@ export function MessageList({
         />
       ))}
       {isStreaming && messages[messages.length - 1]?.content === '' && (
-        <TypingIndicator />
+        <TypingIndicator assistantBgColor={assistantBgColor} logoUrl={logoUrl} />
       )}
     </div>
   );
