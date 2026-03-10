@@ -614,8 +614,8 @@ function getStyles(): string {
     }
 
     @keyframes mb-badge-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.15); opacity: 0.85; }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
     }
 
     .mb-badge-bounce {
@@ -631,27 +631,31 @@ function getStyles(): string {
     }
 
     .mb-badge-shake {
-      animation: mb-badge-shake 3s ease-in-out infinite;
+      animation: mb-badge-shake 2.5s ease-in-out infinite;
     }
 
     @keyframes mb-badge-shake {
-      0%, 85%, 100% { transform: translateX(0); }
-      88% { transform: translateX(-3px) rotate(-5deg); }
-      91% { transform: translateX(3px) rotate(5deg); }
-      94% { transform: translateX(-2px) rotate(-3deg); }
-      97% { transform: translateX(2px) rotate(3deg); }
+      0%, 50%, 100% { transform: translateX(0) rotate(0deg); }
+      55% { transform: translateX(-3px) rotate(-5deg); }
+      60% { transform: translateX(3px) rotate(5deg); }
+      65% { transform: translateX(-3px) rotate(-5deg); }
+      70% { transform: translateX(3px) rotate(5deg); }
+      75% { transform: translateX(-2px) rotate(-3deg); }
+      80% { transform: translateX(0) rotate(0deg); }
     }
 
     .mb-badge-wiggle {
-      animation: mb-badge-wiggle 2.5s ease-in-out infinite;
+      animation: mb-badge-wiggle 2s ease-in-out infinite;
     }
 
     @keyframes mb-badge-wiggle {
-      0%, 75%, 100% { transform: rotate(0deg); }
-      80% { transform: rotate(-12deg); }
-      85% { transform: rotate(10deg); }
-      90% { transform: rotate(-8deg); }
-      95% { transform: rotate(5deg); }
+      0%, 40%, 100% { transform: rotate(0deg); }
+      45% { transform: rotate(-12deg); }
+      50% { transform: rotate(10deg); }
+      55% { transform: rotate(-10deg); }
+      60% { transform: rotate(8deg); }
+      65% { transform: rotate(-5deg); }
+      70% { transform: rotate(0deg); }
     }
 
     /* ========== Powered By ========== */
