@@ -416,7 +416,7 @@ function getStyles(): string {
       padding: 12px 16px;
       border: 1px solid #ddd;
       border-radius: 24px;
-      font-size: 14px;
+      font-size: 16px;
       outline: none;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
       font-family: inherit;
@@ -503,7 +503,7 @@ function getStyles(): string {
       padding: 12px;
       border: 1px solid #ddd;
       border-radius: 8px;
-      font-size: 14px;
+      font-size: 16px;
       font-family: inherit;
       transition: border-color 0.2s ease;
     }
@@ -701,13 +701,6 @@ function getStyles(): string {
         height: 56px;
       }
 
-      .mb-input {
-        font-size: 16px;
-      }
-
-      .mb-prechat-input {
-        font-size: 16px;
-      }
     }
   `;
 }
