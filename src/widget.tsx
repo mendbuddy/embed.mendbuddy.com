@@ -3,11 +3,18 @@
 // ============================================================================
 
 import { h, Fragment } from 'preact';
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { ChatButton } from './components/ChatButton';
 import { ChatWindow } from './components/ChatWindow';
 import { useChat } from './hooks/useChat';
 import { useConfig } from './hooks/useConfig';
+import {
+  getUnreadCount,
+  setUnreadCount,
+  getLastSeenTimestamp,
+  setLastSeenTimestamp,
+} from './storage/session';
+import { STORAGE_KEY_PREFIX } from './constants';
 
 interface WidgetProps {
   embedId: string;
@@ -29,8 +36,74 @@ export function Widget({
   onMessage,
 }: WidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [unreadCount, setUnreadCountState] = useState<number>(() => getUnreadCount(embedId));
   const { config, loading: configLoading, error: configError, errorCode: configErrorCode } = useConfig(apiUrl, embedId);
   const chat = useChat(apiUrl, embedId, config);
+
+  const prevMessagesLenRef = useRef(0);
+  const initialLoadDoneRef = useRef(false);
+
+  // Reset unread when widget opens
+  useEffect(() => {
+    if (isOpen) {
+      setUnreadCountState(0);
+      setUnreadCount(embedId, 0);
+      setLastSeenTimestamp(embedId, new Date().toISOString());
+    }
+  }, [isOpen, embedId]);
+
+  // Track new assistant messages while closed
+  useEffect(() => {
+    const currentLen = chat.messages.length;
+    const prevLen = prevMessagesLenRef.current;
+
+    if (currentLen > prevLen) {
+      if (!initialLoadDoneRef.current) {
+        // First batch = history load — count unseen messages
+        initialLoadDoneRef.current = true;
+        const lastSeen = getLastSeenTimestamp(embedId);
+        if (lastSeen && !isOpen) {
+          let unseen = 0;
+          for (const msg of chat.messages) {
+            if (msg.role === 'assistant' && msg.created_at > lastSeen) {
+              unseen++;
+            }
+          }
+          if (unseen > 0) {
+            setUnreadCountState(unseen);
+            setUnreadCount(embedId, unseen);
+          }
+        }
+      } else if (!isOpen) {
+        // Incremental new messages while closed
+        const newMessages = chat.messages.slice(prevLen);
+        let newAssistant = 0;
+        for (const msg of newMessages) {
+          if (msg.role === 'assistant') {
+            newAssistant++;
+          }
+        }
+        if (newAssistant > 0) {
+          const updated = unreadCount + newAssistant;
+          setUnreadCountState(updated);
+          setUnreadCount(embedId, updated);
+        }
+      }
+    }
+
+    prevMessagesLenRef.current = currentLen;
+  }, [chat.messages.length, embedId, isOpen, unreadCount]);
+
+  // Cross-tab sync via StorageEvent
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === `${STORAGE_KEY_PREFIX}${embedId}_unread`) {
+        setUnreadCountState(parseInt(e.newValue || '0', 10));
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [embedId]);
 
   // Handle auto-open
   useEffect(() => {
@@ -120,6 +193,9 @@ export function Widget({
         buttonColor={config.button_color || config.primary_color}
         chatIcon={config.chat_icon || 'chat-circle-dots'}
         widgetPosition={config.widget_position || 'bottom-right'}
+        unreadCount={unreadCount}
+        badgeColor={config.badge_color || '#ef4444'}
+        badgeAnimation={config.badge_animation || 'bounce'}
       />
       <ChatWindow
         isOpen={isOpen}

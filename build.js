@@ -12,7 +12,7 @@ async function build() {
     sourcemap: false,
     format: 'iife',
     globalName: 'MendBuddyChat',
-    target: ['es2020', 'chrome80', 'firefox80', 'safari14'],
+    target: ['es2022', 'chrome105', 'firefox105', 'safari16'],
     outfile: 'dist/v1/chat.js',
     jsxFactory: 'h',
     jsxFragment: 'Fragment',

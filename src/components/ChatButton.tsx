@@ -11,6 +11,9 @@ interface ChatButtonProps {
   buttonColor: string;
   chatIcon: string;
   widgetPosition: string;
+  unreadCount: number;
+  badgeColor: string;
+  badgeAnimation: string;
 }
 
 const CloseIcon = () => (
@@ -32,8 +35,12 @@ export function ChatButton({
   buttonColor,
   chatIcon,
   widgetPosition,
+  unreadCount,
+  badgeColor,
+  badgeAnimation,
 }: ChatButtonProps) {
   const posStyle = BUTTON_POSITIONS[widgetPosition] || BUTTON_POSITIONS['bottom-right'];
+  const animClass = badgeAnimation && badgeAnimation !== 'none' ? ` mb-badge-${badgeAnimation}` : '';
 
   return (
     <button
@@ -46,6 +53,14 @@ export function ChatButton({
         <CloseIcon />
       ) : (
         <svg viewBox="0 0 256 256" fill="currentColor" dangerouslySetInnerHTML={{ __html: getIconSvg(chatIcon) }} />
+      )}
+      {!isOpen && unreadCount > 0 && (
+        <span
+          class={`mb-badge mb-badge-pop${animClass}`}
+          style={{ backgroundColor: badgeColor }}
+        >
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
       )}
     </button>
   );

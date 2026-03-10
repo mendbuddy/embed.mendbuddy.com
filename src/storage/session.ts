@@ -70,3 +70,52 @@ export function setPreChatSubmitted(embedId: string, submitted: boolean): void {
     // localStorage not available
   }
 }
+
+/**
+ * Get unread message count
+ */
+export function getUnreadCount(embedId: string): number {
+  try {
+    const val = localStorage.getItem(`${STORAGE_KEY_PREFIX}${embedId}_unread`);
+    return val ? parseInt(val, 10) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Set unread message count
+ */
+export function setUnreadCount(embedId: string, count: number): void {
+  try {
+    if (count > 0) {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}${embedId}_unread`, String(count));
+    } else {
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${embedId}_unread`);
+    }
+  } catch {
+    // localStorage not available
+  }
+}
+
+/**
+ * Get last seen message timestamp
+ */
+export function getLastSeenTimestamp(embedId: string): string | null {
+  try {
+    return localStorage.getItem(`${STORAGE_KEY_PREFIX}${embedId}_last_seen`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set last seen message timestamp
+ */
+export function setLastSeenTimestamp(embedId: string, ts: string): void {
+  try {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${embedId}_last_seen`, ts);
+  } catch {
+    // localStorage not available
+  }
+}

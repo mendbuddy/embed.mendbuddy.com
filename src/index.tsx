@@ -407,10 +407,12 @@ function getStyles(): string {
       display: flex;
       gap: 8px;
       background: white;
+      flex-shrink: 0;
     }
 
     .mb-input {
       flex: 1;
+      min-width: 0;
       padding: 12px 16px;
       border: 1px solid #ddd;
       border-radius: 24px;
@@ -432,6 +434,7 @@ function getStyles(): string {
     .mb-send {
       width: 44px;
       height: 44px;
+      flex-shrink: 0;
       border: none;
       border-radius: 50%;
       cursor: pointer;
@@ -578,6 +581,79 @@ function getStyles(): string {
       line-height: 1;
     }
 
+    /* ========== Unread Badge ========== */
+    .mb-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 10px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 20px;
+      text-align: center;
+      pointer-events: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .mb-badge-pop {
+      animation: mb-badge-pop 0.3s ease;
+    }
+
+    @keyframes mb-badge-pop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    .mb-badge-pulse {
+      animation: mb-badge-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes mb-badge-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.85; }
+    }
+
+    .mb-badge-bounce {
+      animation: mb-badge-bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes mb-badge-bounce {
+      0%, 100% { transform: translateY(0); }
+      20% { transform: translateY(-5px); }
+      40% { transform: translateY(0); }
+      60% { transform: translateY(-3px); }
+      80% { transform: translateY(0); }
+    }
+
+    .mb-badge-shake {
+      animation: mb-badge-shake 3s ease-in-out infinite;
+    }
+
+    @keyframes mb-badge-shake {
+      0%, 85%, 100% { transform: translateX(0); }
+      88% { transform: translateX(-3px) rotate(-5deg); }
+      91% { transform: translateX(3px) rotate(5deg); }
+      94% { transform: translateX(-2px) rotate(-3deg); }
+      97% { transform: translateX(2px) rotate(3deg); }
+    }
+
+    .mb-badge-wiggle {
+      animation: mb-badge-wiggle 2.5s ease-in-out infinite;
+    }
+
+    @keyframes mb-badge-wiggle {
+      0%, 75%, 100% { transform: rotate(0deg); }
+      80% { transform: rotate(-12deg); }
+      85% { transform: rotate(10deg); }
+      90% { transform: rotate(-8deg); }
+      95% { transform: rotate(5deg); }
+    }
+
     /* ========== Powered By ========== */
     .mb-powered {
       padding: 8px 12px;
@@ -606,14 +682,31 @@ function getStyles(): string {
         right: 0 !important;
         left: 0 !important;
         width: 100% !important;
+        height: 100dvh !important;
         height: 100% !important;
+        max-height: 100dvh !important;
         max-height: 100% !important;
         border-radius: 0;
+      }
+
+      @supports (height: 100dvh) {
+        .mb-window {
+          height: 100dvh !important;
+          max-height: 100dvh !important;
+        }
       }
 
       .mb-button {
         width: 56px;
         height: 56px;
+      }
+
+      .mb-input {
+        font-size: 16px;
+      }
+
+      .mb-prechat-input {
+        font-size: 16px;
       }
     }
   `;
