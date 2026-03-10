@@ -56,7 +56,7 @@ export function ChatButton({
       )}
       {!isOpen && unreadCount > 0 && (
         <span
-          class={`mb-badge mb-badge-pop${animClass}`}
+          class={`mb-badge${animClass}`}
           style={{ backgroundColor: badgeColor }}
         >
           {unreadCount > 99 ? '99+' : unreadCount}
