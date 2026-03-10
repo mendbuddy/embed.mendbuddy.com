@@ -58,6 +58,7 @@ export interface EmbedConfigPublic {
   brand_image_url: string | null;
   chat_icon: string;
   widget_position: string;
+  badge_enabled: boolean;
   badge_color: string;
   badge_animation: 'none' | 'pulse' | 'bounce' | 'shake' | 'wiggle';
 }

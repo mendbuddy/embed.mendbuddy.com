@@ -218,7 +218,7 @@ export function Widget({
         buttonColor={config.button_color || config.primary_color}
         chatIcon={config.chat_icon || 'chat-circle-dots'}
         widgetPosition={config.widget_position || 'bottom-right'}
-        unreadCount={unreadCount}
+        unreadCount={config.badge_enabled === false ? 0 : unreadCount}
         badgeColor={config.badge_color || '#ef4444'}
         badgeAnimation={config.badge_animation || 'bounce'}
       />
