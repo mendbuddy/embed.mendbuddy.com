@@ -1,5 +1,5 @@
 // ============================================================================
-// Message Component - Single chat message
+// Message Component - Single chat message (handles all states: typing, content)
 // ============================================================================
 
 import { h } from 'preact';
@@ -25,12 +25,10 @@ export function Message({ message, userBgColor, assistantBgColor, logoUrl }: Mes
   const isUser = message.role === 'user';
   const bgColor = isUser ? userBgColor : assistantBgColor;
   const textColor = getTextColor(bgColor);
-
-  // Don't render empty bubbles — the TypingIndicator handles the pre-content state
-  if (!message.content) return null;
+  const isTyping = !isUser && !message.content;
 
   return (
-    <div class={`mb-message ${isUser ? 'user' : 'assistant'}`}>
+    <div class={`mb-message ${isUser ? 'user' : 'assistant'}${isTyping ? ' typing' : ''}`}>
       {!isUser && logoUrl && (
         <img src={logoUrl} alt="" class="mb-avatar" />
       )}
@@ -38,8 +36,21 @@ export function Message({ message, userBgColor, assistantBgColor, logoUrl }: Mes
         class="mb-message-bubble"
         style={{ backgroundColor: bgColor, color: textColor }}
       >
-        {message.content}
+        {isTyping ? (
+          <div class="mb-typing-dots">
+            <span />
+            <span />
+            <span />
+          </div>
+        ) : (
+          message.content
+        )}
       </div>
+      {isUser && message.status && (
+        <div class="mb-message-status">
+          {message.status === 'delivered' ? 'Delivered' : 'Read'}
+        </div>
+      )}
       {!isUser && message.sources && message.sources.length > 0 && (
         <div class="mb-sources">
           <div class="mb-sources-label">Sources:</div>

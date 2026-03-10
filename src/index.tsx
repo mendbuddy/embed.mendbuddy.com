@@ -311,6 +311,14 @@ function getStyles(): string {
       border-bottom-right-radius: 4px;
     }
 
+    .mb-message-status {
+      font-size: 11px;
+      color: #999;
+      text-align: right;
+      margin-top: 2px;
+      padding-right: 4px;
+    }
+
     .mb-message.assistant .mb-message-bubble {
       border-bottom-left-radius: 4px;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);

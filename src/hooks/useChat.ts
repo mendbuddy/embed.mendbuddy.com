@@ -28,6 +28,7 @@ export function useChat(
   const clientRef = useRef<ApiClient | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
   const sessionCreatedRef = useRef(false);
+  const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize client
   useEffect(() => {
@@ -133,14 +134,24 @@ export function useChat(
       const hasSession = await ensureSession();
       if (!hasSession) return;
 
-      // Add user message immediately
+      // Add user message immediately with "delivered" status
+      const userMsgId = `temp_${Date.now()}`;
       const userMessage: Message = {
-        id: `temp_${Date.now()}`,
+        id: userMsgId,
         role: 'user',
         content,
         created_at: new Date().toISOString(),
+        status: 'delivered',
       };
       setMessages((prev) => [...prev, userMessage]);
+
+      // After 1s, upgrade to "read"
+      if (readTimerRef.current) clearTimeout(readTimerRef.current);
+      readTimerRef.current = setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsgId ? { ...m, status: 'read' as const } : m))
+        );
+      }, 1000);
 
       // Start streaming
       setIsStreaming(true);
@@ -154,9 +165,13 @@ export function useChat(
         onStart: (tid, mid) => {
           setThreadId(tid);
           assistantId = mid;
-          // Add placeholder assistant message
+          // Clear read timer and remove status — typing dots take over
+          if (readTimerRef.current) {
+            clearTimeout(readTimerRef.current);
+            readTimerRef.current = null;
+          }
           setMessages((prev) => [
-            ...prev,
+            ...prev.map((m) => (m.id === userMsgId ? { ...m, status: undefined } : m)),
             {
               id: mid,
               role: 'assistant',

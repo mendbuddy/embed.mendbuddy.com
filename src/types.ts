@@ -66,6 +66,7 @@ export interface Message {
   content: string;
   created_at: string;
   sources?: Source[];
+  status?: 'delivered' | 'read';
 }
 
 export interface Source {

@@ -6,7 +6,6 @@ import { h } from 'preact';
 import { useRef, useEffect } from 'preact/hooks';
 import type { Message as MessageType } from '../types';
 import { Message } from './Message';
-import { TypingIndicator } from './TypingIndicator';
 import { SuggestedMessages } from './SuggestedMessages';
 
 interface MessageListProps {
@@ -64,9 +63,6 @@ export function MessageList({
           logoUrl={logoUrl}
         />
       ))}
-      {isStreaming && messages[messages.length - 1]?.content === '' && (
-        <TypingIndicator assistantBgColor={assistantBgColor} logoUrl={logoUrl} />
-      )}
     </div>
   );
 }
