@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { EmbedConfigPublic, Message, ChatResponse, Source } from '../types';
-import { getSessionToken, setSessionToken } from '../storage/session';
+import { getSessionToken, setSessionToken, clearSessionToken } from '../storage/session';
 
 export class ApiClient {
   private baseUrl: string;
@@ -40,6 +40,10 @@ export class ApiClient {
     const data = await response.json();
 
     if (!response.ok || !data.success) {
+      // If session expired, clear stale token so a new one gets created
+      if (data.code === 'SESSION_INVALID' || data.code === 'SESSION_REQUIRED') {
+        clearSessionToken(this.embedId);
+      }
       const err = new Error(data.error || 'Request failed');
       (err as any).code = data.code;
       throw err;
@@ -122,6 +126,9 @@ export class ApiClient {
           try {
             const data = await response.json();
             errorMsg = data.error || errorMsg;
+            if (data.code === 'SESSION_INVALID' || data.code === 'SESSION_REQUIRED') {
+              clearSessionToken(this.embedId);
+            }
           } catch {
             // Response may not be JSON
           }

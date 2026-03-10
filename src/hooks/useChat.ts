@@ -8,6 +8,7 @@ import { ApiClient } from '../api/client';
 import {
   getSessionToken,
   hasExistingSession,
+  clearSessionToken,
   getPreChatSubmitted,
   setPreChatSubmitted,
 } from '../storage/session';
@@ -50,8 +51,12 @@ export function useChat(
         if (result.messages.length > 0) {
           setMessages(result.messages);
         }
-      } catch (err) {
-        // Ignore history load errors - session might be expired
+      } catch (err: any) {
+        // Session expired — clear stale token so ensureSession creates a new one
+        if (err.code === 'SESSION_INVALID' || err.code === 'SESSION_REQUIRED') {
+          clearSessionToken(embedId);
+          sessionCreatedRef.current = false;
+        }
         console.debug('Failed to load history:', err);
       }
     }
@@ -65,24 +70,20 @@ export function useChat(
   const ensureSession = useCallback(async (): Promise<boolean> => {
     if (!clientRef.current) return false;
 
-    // Check if we already have a session
+    // Check if we already have a session token
     if (getSessionToken(embedId)) {
       return true;
     }
 
-    // Create new session
-    if (!sessionCreatedRef.current) {
-      try {
-        await clientRef.current.createSession();
-        sessionCreatedRef.current = true;
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create session');
-        return false;
-      }
+    // Create new session (token missing or was cleared due to expiry)
+    try {
+      await clientRef.current.createSession();
+      sessionCreatedRef.current = true;
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create session');
+      return false;
     }
-
-    return false;
   }, [embedId]);
 
   /**

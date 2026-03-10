@@ -371,16 +371,16 @@ function getStyles(): string {
       height: 8px;
       background: #999;
       border-radius: 50%;
-      animation: mb-typing 1.4s infinite ease-in-out;
+      animation: mb-typing 0.4s infinite alternate ease-in-out;
     }
 
     .mb-typing-dots span:nth-child(1) { animation-delay: 0s; }
-    .mb-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .mb-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    .mb-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .mb-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 
     @keyframes mb-typing {
-      0%, 60%, 100% { transform: translateY(0); }
-      30% { transform: translateY(-5px); }
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-5px); }
     }
 
     /* ========== Message Input ========== */
