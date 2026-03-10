@@ -5,6 +5,8 @@
 
 /v1/chat.js
   Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=60, s-maxage=60
 
 /mendbuddy-chat-widget.js
   Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=60, s-maxage=60

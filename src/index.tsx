@@ -300,6 +300,16 @@ function getStyles(): string {
       flex-shrink: 0;
     }
 
+    .mb-message-content {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .mb-message.user .mb-message-content {
+      align-items: flex-end;
+    }
+
     .mb-message-bubble {
       padding: 12px 16px;
       border-radius: 16px;
@@ -314,7 +324,6 @@ function getStyles(): string {
     .mb-message-status {
       font-size: 11px;
       color: #999;
-      text-align: right;
       margin-top: 2px;
       padding-right: 4px;
     }

@@ -32,25 +32,27 @@ export function Message({ message, userBgColor, assistantBgColor, logoUrl }: Mes
       {!isUser && logoUrl && (
         <img src={logoUrl} alt="" class="mb-avatar" />
       )}
-      <div
-        class="mb-message-bubble"
-        style={{ backgroundColor: bgColor, color: textColor }}
-      >
-        {isTyping ? (
-          <div class="mb-typing-dots">
-            <span />
-            <span />
-            <span />
+      <div class="mb-message-content">
+        <div
+          class="mb-message-bubble"
+          style={{ backgroundColor: bgColor, color: textColor }}
+        >
+          {isTyping ? (
+            <div class="mb-typing-dots">
+              <span />
+              <span />
+              <span />
+            </div>
+          ) : (
+            message.content
+          )}
+        </div>
+        {isUser && message.status && (
+          <div class="mb-message-status">
+            {message.status === 'delivered' ? 'Delivered' : 'Read'}
           </div>
-        ) : (
-          message.content
         )}
       </div>
-      {isUser && message.status && (
-        <div class="mb-message-status">
-          {message.status === 'delivered' ? 'Delivered' : 'Read'}
-        </div>
-      )}
       {!isUser && message.sources && message.sources.length > 0 && (
         <div class="mb-sources">
           <div class="mb-sources-label">Sources:</div>
