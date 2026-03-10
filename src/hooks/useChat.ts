@@ -145,13 +145,13 @@ export function useChat(
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // After 1s, upgrade to "read"
+      // After 2s, upgrade to "read"
       if (readTimerRef.current) clearTimeout(readTimerRef.current);
       readTimerRef.current = setTimeout(() => {
         setMessages((prev) =>
           prev.map((m) => (m.id === userMsgId ? { ...m, status: 'read' as const } : m))
         );
-      }, 1000);
+      }, 2000);
 
       // Start streaming
       setIsStreaming(true);
