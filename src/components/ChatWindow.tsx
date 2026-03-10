@@ -35,7 +35,7 @@ export function ChatWindow({
     config.pre_chat_fields.length > 0 &&
     !chat.preChatSubmitted;
 
-  const showOffline = config.business_hours_enabled && !config.is_online;
+  const showOffline = !config.is_online;
 
   const posStyle = WINDOW_POSITIONS[config.widget_position] || WINDOW_POSITIONS['bottom-right'];
 

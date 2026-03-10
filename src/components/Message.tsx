@@ -26,6 +26,9 @@ export function Message({ message, userBgColor, assistantBgColor, logoUrl }: Mes
   const bgColor = isUser ? userBgColor : assistantBgColor;
   const textColor = getTextColor(bgColor);
 
+  // Don't render empty bubbles — the TypingIndicator handles the pre-content state
+  if (!message.content) return null;
+
   return (
     <div class={`mb-message ${isUser ? 'user' : 'assistant'}`}>
       {!isUser && logoUrl && (

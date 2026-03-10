@@ -36,13 +36,12 @@ export function Header({
       )}
       <div class="mb-header-info">
         <div class="mb-header-title">{assistantName || 'AI Assistant'}</div>
-        <div class="mb-header-status">
-          <span
-            class="mb-status-dot"
-            style={{ backgroundColor: isOnline ? '#22c55e' : '#9ca3af' }}
-          />
-          {isOnline ? 'Online' : 'Offline'}
-        </div>
+        {isOnline && (
+          <div class="mb-header-status">
+            <span class="mb-status-dot" style={{ backgroundColor: '#22c55e' }} />
+            Available
+          </div>
+        )}
       </div>
       <button class="mb-header-close" onClick={onClose} aria-label="Close chat">
         <CloseIcon />

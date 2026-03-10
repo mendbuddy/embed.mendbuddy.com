@@ -225,7 +225,7 @@ function getStyles(): string {
 
     .mb-header-status {
       font-size: 12px;
-      color: #666;
+      color: #22c55e;
       display: flex;
       align-items: center;
       gap: 4px;
