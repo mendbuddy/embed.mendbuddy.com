@@ -200,6 +200,99 @@ export class ApiClient {
   }
 
   /**
+   * Connect to SSE event stream for real-time push (admin messages).
+   * Returns a disconnect function.
+   */
+  connectEvents(callbacks: {
+    onMessage?: (event: { type: string; threadId: string; messageId: string; content: string; role: string; created_at: string }) => void;
+    onError?: (error: string) => void;
+  }): () => void {
+    const url = `${this.baseUrl}/embed/${this.embedId}/events`;
+    const token = getSessionToken(this.embedId);
+
+    const controller = new AbortController();
+    let reconnectDelay = 1000;
+    let lastEventId = '';
+    let stopped = false;
+
+    const connect = () => {
+      if (stopped) return;
+
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+      };
+      if (token) headers['X-Embed-Session'] = token;
+      if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+
+      fetch(url, { headers, signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok || !response.body) {
+            throw new Error(`SSE connect failed: ${response.status}`);
+          }
+
+          // Reset backoff on successful connection
+          reconnectDelay = 1000;
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop() || '';
+
+            for (const block of blocks) {
+              if (!block.trim() || block.startsWith(':')) continue;
+
+              // Parse SSE fields
+              let id = '';
+              let data = '';
+              for (const line of block.split('\n')) {
+                if (line.startsWith('id: ')) id = line.slice(4);
+                else if (line.startsWith('data: ')) data = line.slice(6);
+              }
+
+              if (id) lastEventId = id;
+              if (!data) continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                callbacks.onMessage?.(parsed);
+              } catch {
+                // Ignore unparseable data
+              }
+            }
+          }
+
+          // Stream ended — reconnect
+          if (!stopped) scheduleReconnect();
+        })
+        .catch((err) => {
+          if (err.name === 'AbortError' || stopped) return;
+          callbacks.onError?.(err.message);
+          scheduleReconnect();
+        });
+    };
+
+    const scheduleReconnect = () => {
+      if (stopped) return;
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      controller.abort();
+    };
+  }
+
+  /**
    * Get chat history
    */
   async getHistory(limit = 50, offset = 0): Promise<{ messages: Message[]; has_more: boolean }> {

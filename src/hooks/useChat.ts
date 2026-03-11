@@ -29,6 +29,8 @@ export function useChat(
   const abortRef = useRef<(() => void) | null>(null);
   const sessionCreatedRef = useRef(false);
   const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseDisconnectRef = useRef<(() => void) | null>(null);
+  const knownMessageIdsRef = useRef(new Set<string>());
 
   // Initialize client
   useEffect(() => {
@@ -51,6 +53,10 @@ export function useChat(
         const result = await clientRef.current!.getHistory();
         if (result.messages.length > 0) {
           setMessages(result.messages);
+          // Track known IDs to deduplicate SSE events
+          for (const m of result.messages) {
+            knownMessageIdsRef.current.add(m.id);
+          }
         }
       } catch (err: any) {
         // Session expired — clear stale token so ensureSession creates a new one
@@ -64,6 +70,43 @@ export function useChat(
 
     loadHistory();
   }, [config, embedId]);
+
+  // Connect SSE for real-time push once we have a threadId
+  useEffect(() => {
+    if (!threadId || !clientRef.current) return;
+
+    // Disconnect previous connection if any
+    sseDisconnectRef.current?.();
+
+    const disconnect = clientRef.current.connectEvents({
+      onMessage: (event) => {
+        if (event.type !== 'embed.new_message') return;
+
+        // Deduplicate — skip if we already have this message
+        if (knownMessageIdsRef.current.has(event.messageId)) return;
+        knownMessageIdsRef.current.add(event.messageId);
+
+        const newMsg: Message = {
+          id: event.messageId,
+          role: event.role as 'assistant',
+          content: event.content,
+          created_at: event.created_at,
+        };
+        setMessages((prev) => {
+          // Double-check dedup in state
+          if (prev.some((m) => m.id === event.messageId)) return prev;
+          return [...prev, newMsg];
+        });
+      },
+    });
+
+    sseDisconnectRef.current = disconnect;
+
+    return () => {
+      disconnect();
+      sseDisconnectRef.current = null;
+    };
+  }, [threadId]);
 
   /**
    * Ensure session exists before making requests
@@ -165,6 +208,7 @@ export function useChat(
         onStart: (tid, mid) => {
           setThreadId(tid);
           assistantId = mid;
+          knownMessageIdsRef.current.add(mid);
           // Clear read timer and remove status — typing dots take over
           if (readTimerRef.current) {
             clearTimeout(readTimerRef.current);
