@@ -53,17 +53,6 @@ export function Message({ message, userBgColor, assistantBgColor, logoUrl }: Mes
           </div>
         )}
       </div>
-      {!isUser && message.sources && message.sources.length > 0 && (
-        <div class="mb-sources">
-          <div class="mb-sources-label">Sources:</div>
-          {message.sources.map((source, index) => (
-            <div key={index} class="mb-source">
-              {source.document_name}
-              {source.pages.length > 0 && ` (p. ${source.pages.join(', ')})`}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
