@@ -135,11 +135,18 @@ function getStyles(): string {
       box-sizing: border-box;
     }
 
+    :host {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
     .mb-widget {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1.5;
       color: #333;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
       --primary-color: #0066FF;
     }
 
@@ -420,6 +427,7 @@ function getStyles(): string {
       outline: none;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
       font-family: inherit;
+      touch-action: manipulation;
     }
 
     .mb-input:focus {
@@ -506,6 +514,7 @@ function getStyles(): string {
       font-size: 16px;
       font-family: inherit;
       transition: border-color 0.2s ease;
+      touch-action: manipulation;
     }
 
     .mb-prechat-input:focus {
@@ -522,12 +531,13 @@ function getStyles(): string {
       padding: 14px 24px;
       border: none;
       border-radius: 8px;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 500;
       color: white;
       cursor: pointer;
       margin-top: 8px;
       transition: opacity 0.2s ease;
+      touch-action: manipulation;
     }
 
     .mb-prechat-submit:hover:not(:disabled) {

@@ -43,31 +43,6 @@ export function Widget({
   const prevMessagesLenRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
 
-  // Prevent iOS auto-zoom when chat is open by setting maximum-scale=1
-  useEffect(() => {
-    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-    if (!meta) return;
-
-    const originalContent = meta.getAttribute('content') || '';
-
-    if (isOpen) {
-      // Add maximum-scale=1 to prevent zoom while chat is open
-      const hasMaxScale = /maximum-scale\s*=/.test(originalContent);
-      if (hasMaxScale) {
-        meta.setAttribute('content', originalContent.replace(/maximum-scale\s*=\s*[\d.]+/, 'maximum-scale=1'));
-      } else {
-        meta.setAttribute('content', originalContent + ', maximum-scale=1');
-      }
-    }
-
-    return () => {
-      // Restore original viewport when chat closes
-      if (originalContent) {
-        meta.setAttribute('content', originalContent);
-      }
-    };
-  }, [isOpen]);
-
   // Reset unread when widget opens
   useEffect(() => {
     if (isOpen) {
