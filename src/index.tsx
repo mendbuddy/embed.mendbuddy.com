@@ -9,6 +9,54 @@ import type { MendBuddyConfig } from './types';
 
 // Global instance
 let widgetContainer: HTMLElement | null = null;
+let zoomPreventionCleanup: (() => void) | null = null;
+
+/**
+ * Prevent iOS Safari/WebKit auto-zoom when focusing inputs inside Shadow DOM.
+ * Locks the viewport scale to 1 while an input is focused, restores on blur.
+ * Only activates on iOS (all iOS browsers use WebKit).
+ */
+function setupIOSZoomPrevention(shadowRoot: ShadowRoot): void {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!isIOS) return;
+
+  let originalViewport = '';
+
+  const onFocusIn = (e: Event) => {
+    const target = e.target as HTMLElement;
+    const tag = target.tagName;
+    if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') return;
+
+    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
+    if (!meta) return;
+
+    originalViewport = meta.getAttribute('content') || '';
+    meta.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover'
+    );
+  };
+
+  const onFocusOut = () => {
+    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
+    if (!meta || !originalViewport) return;
+    meta.setAttribute('content', originalViewport);
+  };
+
+  shadowRoot.addEventListener('focusin', onFocusIn);
+  shadowRoot.addEventListener('focusout', onFocusOut);
+
+  zoomPreventionCleanup = () => {
+    shadowRoot.removeEventListener('focusin', onFocusIn);
+    shadowRoot.removeEventListener('focusout', onFocusOut);
+    // Restore viewport if still locked
+    if (originalViewport) {
+      const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
+      if (meta) meta.setAttribute('content', originalViewport);
+    }
+  };
+}
 
 /**
  * Initialize the chat widget
@@ -44,6 +92,9 @@ function init(config: MendBuddyConfig): void {
   root.style.cssText = 'pointer-events: auto;';
   shadow.appendChild(root);
 
+  // Prevent iOS auto-zoom on input focus by locking viewport scale
+  setupIOSZoomPrevention(shadow);
+
   // Render widget
   render(
     <Widget
@@ -65,6 +116,8 @@ function init(config: MendBuddyConfig): void {
  * Destroy the widget
  */
 function destroy(): void {
+  zoomPreventionCleanup?.();
+  zoomPreventionCleanup = null;
   if (widgetContainer) {
     widgetContainer.remove();
     widgetContainer = null;
