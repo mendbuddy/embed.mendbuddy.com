@@ -152,71 +152,40 @@ export function Widget({
     }
   }, [chat.messages.length, onMessage]);
 
-  // Kiosk mode: auto-close after idle timeout
-  // Uses refs to avoid stale closure issues with setTimeout
-  const kioskTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isOpenRef = useRef(isOpen);
-  const configRef = useRef(config);
-  const chatRef = useRef(chat);
-  isOpenRef.current = isOpen;
-  configRef.current = config;
-  chatRef.current = chat;
+  // Kiosk mode: auto-close & reset after idle timeout
+  // Simple 1-second polling interval — no stale closures, no complex deps
+  const kioskSecondsLeftRef = useRef(0);
+  const kioskMsgCountRef = useRef(0);
 
-  const clearKioskTimer = useCallback(() => {
-    if (kioskTimerRef.current) {
-      clearTimeout(kioskTimerRef.current);
-      kioskTimerRef.current = null;
-    }
-  }, []);
+  useEffect(() => {
+    const timeout = config?.kiosk_idle_timeout_seconds;
+    if (!timeout || !isOpen) return;
 
-  const startKioskTimer = useCallback(() => {
-    clearKioskTimer();
-    const timeout = configRef.current?.kiosk_idle_timeout_seconds;
-    if (!timeout || !isOpenRef.current) return;
+    // Reset countdown
+    kioskSecondsLeftRef.current = timeout;
+    kioskMsgCountRef.current = chat.messages.length;
 
-    kioskTimerRef.current = setTimeout(() => {
-      console.log('[mendbuddy] Kiosk idle timeout — closing chat');
-      setIsOpen(false);
-      onClose?.();
-      if (configRef.current?.kiosk_reset_session) {
-        chatRef.current.resetSession();
+    const interval = setInterval(() => {
+      // New messages arrived → reset countdown
+      if (chat.messages.length !== kioskMsgCountRef.current) {
+        kioskMsgCountRef.current = chat.messages.length;
+        kioskSecondsLeftRef.current = timeout;
+        return;
       }
-    }, timeout * 1000);
-  }, [clearKioskTimer, onClose]);
 
-  // Start timer when chat opens, clear when it closes
-  useEffect(() => {
-    if (!config?.kiosk_idle_timeout_seconds) return;
-    if (isOpen) {
-      startKioskTimer();
-    } else {
-      clearKioskTimer();
-    }
-    return clearKioskTimer;
-  }, [isOpen, config?.kiosk_idle_timeout_seconds, startKioskTimer, clearKioskTimer]);
+      kioskSecondsLeftRef.current -= 1;
 
-  // Reset timer when new messages arrive
-  useEffect(() => {
-    if (config?.kiosk_idle_timeout_seconds && isOpen) {
-      startKioskTimer();
-    }
-  }, [chat.messages.length]);
-
-  // Reset timer on any user interaction
-  useEffect(() => {
-    if (!config?.kiosk_idle_timeout_seconds || !isOpen) return;
-
-    const handler = () => startKioskTimer();
-    const events = ['click', 'keydown', 'touchstart', 'scroll', 'mousemove'];
-    for (const evt of events) {
-      document.addEventListener(evt, handler, { passive: true, capture: true });
-    }
-    return () => {
-      for (const evt of events) {
-        document.removeEventListener(evt, handler, { capture: true });
+      if (kioskSecondsLeftRef.current <= 0) {
+        clearInterval(interval);
+        setIsOpen(false);
+        if (config.kiosk_reset_session) {
+          chat.resetSession();
+        }
       }
-    };
-  }, [config?.kiosk_idle_timeout_seconds, isOpen, startKioskTimer]);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, config?.kiosk_idle_timeout_seconds]);
 
   const handleToggle = useCallback(() => {
     const newState = !isOpen;
