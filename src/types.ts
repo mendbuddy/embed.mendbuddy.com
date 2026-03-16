@@ -64,6 +64,7 @@ export interface EmbedConfigPublic {
   badge_animation: 'none' | 'pulse' | 'bounce' | 'shake' | 'wiggle';
   kiosk_idle_timeout_seconds: number | null;
   kiosk_reset_session: boolean;
+  show_reset_button: boolean;
 }
 
 export interface Message {

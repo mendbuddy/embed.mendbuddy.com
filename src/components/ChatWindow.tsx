@@ -55,6 +55,8 @@ export function ChatWindow({
         logoUrl={config.logo_url}
         isOnline={config.is_online}
         primaryColor={config.primary_color}
+        showResetButton={config.show_reset_button ?? false}
+        onReset={chat.resetSession}
         onClose={onClose}
       />
 
@@ -92,6 +94,7 @@ export function ChatWindow({
             disabled={chat.isLoading || chat.isStreaming}
             placeholder={config.placeholder_text}
             primaryColor={config.primary_color}
+            autoFocus={isOpen}
           />
         </>
       )}
