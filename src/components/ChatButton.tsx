@@ -11,16 +11,11 @@ interface ChatButtonProps {
   buttonColor: string;
   chatIcon: string;
   widgetPosition: string;
+  bubbleSize: string;
   unreadCount: number;
   badgeColor: string;
   badgeAnimation: string;
 }
-
-const CloseIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-  </svg>
-);
 
 const BUTTON_POSITIONS: Record<string, Record<string, string>> = {
   'bottom-right': { bottom: '20px', right: '20px' },
@@ -35,24 +30,29 @@ export function ChatButton({
   buttonColor,
   chatIcon,
   widgetPosition,
+  bubbleSize,
   unreadCount,
   badgeColor,
   badgeAnimation,
 }: ChatButtonProps) {
   const posStyle = BUTTON_POSITIONS[widgetPosition] || BUTTON_POSITIONS['bottom-right'];
   const animClass = badgeAnimation && badgeAnimation !== 'none' ? ` mb-badge-${badgeAnimation}` : '';
+  const sizeNum = parseInt(bubbleSize) || 60;
+  const iconSize = Math.round(sizeNum * 0.47); // scale icon proportionally
 
   return (
     <button
       class="mb-button"
       onClick={onClick}
-      style={{ backgroundColor: buttonColor, ...posStyle }}
+      style={{ backgroundColor: buttonColor, width: `${sizeNum}px`, height: `${sizeNum}px`, ...posStyle }}
       aria-label={isOpen ? 'Close chat' : 'Open chat'}
     >
       {isOpen ? (
-        <CloseIcon />
+        <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+        </svg>
       ) : (
-        <svg viewBox="0 0 256 256" fill="currentColor" dangerouslySetInnerHTML={{ __html: getIconSvg(chatIcon) }} />
+        <svg viewBox="0 0 256 256" fill="currentColor" style={{ width: `${iconSize}px`, height: `${iconSize}px` }} dangerouslySetInnerHTML={{ __html: getIconSvg(chatIcon) }} />
       )}
       {!isOpen && unreadCount > 0 && (
         <span

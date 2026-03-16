@@ -58,9 +58,12 @@ export interface EmbedConfigPublic {
   brand_image_url: string | null;
   chat_icon: string;
   widget_position: string;
+  bubble_size: string;
   badge_enabled: boolean;
   badge_color: string;
   badge_animation: 'none' | 'pulse' | 'bounce' | 'shake' | 'wiggle';
+  kiosk_idle_timeout_seconds: number | null;
+  kiosk_reset_session: boolean;
 }
 
 export interface Message {
@@ -113,4 +116,5 @@ export interface UseChatReturn extends ChatState {
   sendMessage: (content: string) => Promise<void>;
   submitPreChat: (fields: Record<string, string>) => Promise<void>;
   clearError: () => void;
+  resetSession: () => void;
 }

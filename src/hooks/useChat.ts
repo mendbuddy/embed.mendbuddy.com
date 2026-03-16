@@ -265,6 +265,35 @@ export function useChat(
     setError(null);
   }, []);
 
+  /**
+   * Reset session (for kiosk mode) — clears all state and storage
+   */
+  const resetSession = useCallback(() => {
+    // Disconnect SSE
+    sseDisconnectRef.current?.();
+    sseDisconnectRef.current = null;
+
+    // Abort any in-flight stream
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+    }
+
+    // Clear all state
+    setMessages([]);
+    setThreadId(null);
+    setError(null);
+    setIsLoading(false);
+    setIsStreaming(false);
+    setPreChatSubmittedState(false);
+    knownMessageIdsRef.current.clear();
+    sessionCreatedRef.current = false;
+
+    // Clear storage
+    clearSessionToken(embedId);
+    setPreChatSubmitted(embedId, false);
+  }, [embedId]);
+
   return {
     messages,
     isLoading,
@@ -275,5 +304,6 @@ export function useChat(
     sendMessage,
     submitPreChat,
     clearError,
+    resetSession,
   };
 }

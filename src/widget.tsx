@@ -152,6 +152,62 @@ export function Widget({
     }
   }, [chat.messages.length, onMessage]);
 
+  // Kiosk mode: auto-close after idle timeout
+  const kioskTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetKioskTimer = useCallback(() => {
+    if (kioskTimerRef.current) {
+      clearTimeout(kioskTimerRef.current);
+      kioskTimerRef.current = null;
+    }
+    if (!config?.kiosk_idle_timeout_seconds || !isOpen) return;
+
+    kioskTimerRef.current = setTimeout(() => {
+      setIsOpen(false);
+      onClose?.();
+      if (config.kiosk_reset_session) {
+        chat.resetSession();
+      }
+    }, config.kiosk_idle_timeout_seconds * 1000);
+  }, [config?.kiosk_idle_timeout_seconds, config?.kiosk_reset_session, isOpen, onClose, chat]);
+
+  // Start/reset kiosk timer when chat is open or messages change
+  useEffect(() => {
+    if (!config?.kiosk_idle_timeout_seconds) return;
+    if (isOpen) {
+      resetKioskTimer();
+    } else {
+      // Clear timer when closed
+      if (kioskTimerRef.current) {
+        clearTimeout(kioskTimerRef.current);
+        kioskTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (kioskTimerRef.current) {
+        clearTimeout(kioskTimerRef.current);
+        kioskTimerRef.current = null;
+      }
+    };
+  }, [isOpen, chat.messages.length, config?.kiosk_idle_timeout_seconds, resetKioskTimer]);
+
+  // Reset kiosk timer on any user interaction within the widget
+  useEffect(() => {
+    if (!config?.kiosk_idle_timeout_seconds || !isOpen) return;
+
+    const handler = () => resetKioskTimer();
+    const events = ['click', 'keydown', 'touchstart', 'scroll'];
+    // Listen on the document — the shadow DOM events bubble up
+    for (const evt of events) {
+      document.addEventListener(evt, handler, { passive: true, capture: true });
+    }
+    return () => {
+      for (const evt of events) {
+        document.removeEventListener(evt, handler, { capture: true });
+      }
+    };
+  }, [config?.kiosk_idle_timeout_seconds, isOpen, resetKioskTimer]);
+
   const handleToggle = useCallback(() => {
     const newState = !isOpen;
     setIsOpen(newState);
@@ -193,6 +249,7 @@ export function Widget({
         buttonColor={config.button_color || config.primary_color}
         chatIcon={config.chat_icon || 'chat-circle-dots'}
         widgetPosition={config.widget_position || 'bottom-right'}
+        bubbleSize={config.bubble_size || '60px'}
         unreadCount={config.badge_enabled === false ? 0 : unreadCount}
         badgeColor={config.badge_color || '#ef4444'}
         badgeAnimation={config.badge_animation || 'bounce'}

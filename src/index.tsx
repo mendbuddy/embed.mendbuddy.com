@@ -763,11 +763,6 @@ function getStyles(): string {
         }
       }
 
-      .mb-button {
-        width: 56px;
-        height: 56px;
-      }
-
     }
   `;
 }
