@@ -94,7 +94,6 @@ export function ChatWindow({
             disabled={chat.isLoading || chat.isStreaming}
             placeholder={config.placeholder_text}
             primaryColor={config.primary_color}
-            autoFocus={isOpen}
           />
         </>
       )}

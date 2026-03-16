@@ -153,9 +153,13 @@ export function Widget({
   }, [chat.messages.length, onMessage]);
 
   // Kiosk mode: auto-close & reset after idle timeout
-  // Simple 1-second polling interval — no stale closures, no complex deps
+  // Uses a ref for message count to avoid stale closures in the interval callback
   const kioskSecondsLeftRef = useRef(0);
   const kioskMsgCountRef = useRef(0);
+  const chatMsgLenRef = useRef(0);
+
+  // Keep the ref in sync with the latest message count on every render
+  chatMsgLenRef.current = chat.messages.length;
 
   useEffect(() => {
     const timeout = config?.kiosk_idle_timeout_seconds;
@@ -163,12 +167,12 @@ export function Widget({
 
     // Reset countdown
     kioskSecondsLeftRef.current = timeout;
-    kioskMsgCountRef.current = chat.messages.length;
+    kioskMsgCountRef.current = chatMsgLenRef.current;
 
     const interval = setInterval(() => {
       // New messages arrived → reset countdown
-      if (chat.messages.length !== kioskMsgCountRef.current) {
-        kioskMsgCountRef.current = chat.messages.length;
+      if (chatMsgLenRef.current !== kioskMsgCountRef.current) {
+        kioskMsgCountRef.current = chatMsgLenRef.current;
         kioskSecondsLeftRef.current = timeout;
         return;
       }
@@ -191,6 +195,10 @@ export function Widget({
     const newState = !isOpen;
     setIsOpen(newState);
     if (newState) {
+      // Focus the text input during the user gesture (tap) so iOS opens the keyboard.
+      // The input is already in the DOM (window uses opacity, not display:none).
+      const input = document.querySelector('.mb-input') as HTMLInputElement;
+      input?.focus();
       onOpen?.();
     } else {
       onClose?.();

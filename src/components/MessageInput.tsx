@@ -3,14 +3,13 @@
 // ============================================================================
 
 import { h } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
   disabled: boolean;
   placeholder: string;
   primaryColor: string;
-  autoFocus?: boolean;
 }
 
 const SendIcon = () => (
@@ -24,19 +23,9 @@ export function MessageInput({
   disabled,
   placeholder,
   primaryColor,
-  autoFocus,
 }: MessageInputProps) {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-focus the input when autoFocus becomes true (e.g. chat window opens)
-  useEffect(() => {
-    if (autoFocus) {
-      // Small delay to ensure the chat window animation has started and input is visible
-      const timer = setTimeout(() => inputRef.current?.focus(), 100);
-      return () => clearTimeout(timer);
-    }
-  }, [autoFocus]);
 
   const handleSubmit = (e: Event) => {
     e.preventDefault();
