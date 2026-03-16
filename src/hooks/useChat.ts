@@ -32,6 +32,13 @@ export function useChat(
   const sseDisconnectRef = useRef<(() => void) | null>(null);
   const knownMessageIdsRef = useRef(new Set<string>());
 
+  // Text smoothing: buffer incoming chunks and drip-feed characters at a steady rate
+  const smoothBufferRef = useRef('');       // queued text not yet shown
+  const smoothShownRef = useRef('');        // text already rendered
+  const smoothTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const smoothMsgIdRef = useRef<string>(''); // which assistant message we're smoothing
+  const smoothDoneRef = useRef(false);      // has the stream finished?
+
   // Initialize client
   useEffect(() => {
     if (!clientRef.current) {
@@ -170,6 +177,10 @@ export function useChat(
         abortRef.current();
         abortRef.current = null;
       }
+      if (smoothTimerRef.current) {
+        clearInterval(smoothTimerRef.current);
+        smoothTimerRef.current = null;
+      }
 
       setError(null);
 
@@ -204,6 +215,47 @@ export function useChat(
       let assistantId = '';
       let sources: Source[] = [];
 
+      // Reset smoothing state
+      smoothBufferRef.current = '';
+      smoothShownRef.current = '';
+      smoothDoneRef.current = false;
+      if (smoothTimerRef.current) {
+        clearInterval(smoothTimerRef.current);
+        smoothTimerRef.current = null;
+      }
+
+      // Start the smooth drip-feed timer — releases ~3 chars every 20ms (~150 chars/sec)
+      const startSmoothing = (msgId: string) => {
+        smoothMsgIdRef.current = msgId;
+        if (smoothTimerRef.current) return; // already running
+
+        smoothTimerRef.current = setInterval(() => {
+          const buf = smoothBufferRef.current;
+          if (buf.length === 0) {
+            // Nothing left to show — if stream is done, clean up
+            if (smoothDoneRef.current) {
+              clearInterval(smoothTimerRef.current!);
+              smoothTimerRef.current = null;
+              setIsStreaming(false);
+              abortRef.current = null;
+            }
+            return;
+          }
+
+          // Release a few characters at a time for smooth feel
+          const charsToShow = Math.max(1, Math.min(4, Math.ceil(buf.length / 8)));
+          const next = buf.slice(0, charsToShow);
+          smoothBufferRef.current = buf.slice(charsToShow);
+          smoothShownRef.current += next;
+
+          const shown = smoothShownRef.current;
+          const mid = smoothMsgIdRef.current;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === mid ? { ...m, content: shown } : m))
+          );
+        }, 20);
+      };
+
       const abort = clientRef.current.streamMessage(content, {
         onStart: (tid, mid) => {
           setThreadId(tid);
@@ -223,14 +275,12 @@ export function useChat(
               created_at: new Date().toISOString(),
             },
           ]);
+          startSmoothing(mid);
         },
         onChunk: (chunk) => {
           assistantContent += chunk;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, content: assistantContent } : m
-            )
-          );
+          // Queue chunk into the smooth buffer instead of rendering immediately
+          smoothBufferRef.current += chunk;
         },
         onSources: (s) => {
           sources = s;
@@ -239,10 +289,34 @@ export function useChat(
           );
         },
         onDone: () => {
-          setIsStreaming(false);
-          abortRef.current = null;
+          // Mark stream as done — the smooth timer will clean up once buffer is empty
+          smoothDoneRef.current = true;
+          // If buffer is already empty, clean up now
+          if (smoothBufferRef.current.length === 0) {
+            if (smoothTimerRef.current) {
+              clearInterval(smoothTimerRef.current);
+              smoothTimerRef.current = null;
+            }
+            setIsStreaming(false);
+            abortRef.current = null;
+          }
         },
         onError: (err) => {
+          // On error, flush buffer immediately and stop
+          if (smoothTimerRef.current) {
+            clearInterval(smoothTimerRef.current);
+            smoothTimerRef.current = null;
+          }
+          if (smoothBufferRef.current.length > 0) {
+            smoothShownRef.current += smoothBufferRef.current;
+            smoothBufferRef.current = '';
+            const shown = smoothShownRef.current;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, content: shown } : m
+              )
+            );
+          }
           setError(err);
           setIsStreaming(false);
           abortRef.current = null;
@@ -278,6 +352,13 @@ export function useChat(
       abortRef.current();
       abortRef.current = null;
     }
+    if (smoothTimerRef.current) {
+      clearInterval(smoothTimerRef.current);
+      smoothTimerRef.current = null;
+    }
+    smoothBufferRef.current = '';
+    smoothShownRef.current = '';
+    smoothDoneRef.current = false;
 
     // Clear all state
     setMessages([]);
