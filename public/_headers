@@ -14,7 +14,7 @@
   Cache-Control: public, max-age=60, s-maxage=60
 
 /w/*
-  Content-Security-Policy: default-src 'self'; connect-src https://api.mendbuddy.com wss://api.mendbuddy.com; script-src 'self'; style-src 'unsafe-inline'; img-src https: data:; media-src blob:; frame-ancestors *
+  Content-Security-Policy: default-src 'self'; connect-src https://api.mendbuddy.com wss://api.mendbuddy.com; script-src 'self' blob:; style-src 'unsafe-inline'; img-src https: data:; media-src blob:; frame-ancestors *
   Cache-Control: public, max-age=300, s-maxage=300
 
 /w/widget.js
