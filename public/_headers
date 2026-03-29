@@ -1,12 +1,26 @@
 /*
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=300, s-maxage=300
   X-Content-Type-Options: nosniff
+
+/v1/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=60, s-maxage=60
 
 /v1/chat.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: public, max-age=60, s-maxage=60
 
 /mendbuddy-chat-widget.js
+  Access-Control-Allow-Origin: *
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=60, s-maxage=60
+
+/w/*
+  Content-Security-Policy: default-src 'self'; connect-src https://api.mendbuddy.com wss://api.mendbuddy.com; script-src 'self'; style-src 'unsafe-inline'; img-src https: data:; media-src blob:; frame-ancestors *
+  Cache-Control: public, max-age=300, s-maxage=300
+
+/w/widget.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=60, s-maxage=60
+
+/w/voice.js
   Content-Type: application/javascript; charset=utf-8
   Cache-Control: public, max-age=60, s-maxage=60

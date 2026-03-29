@@ -23,6 +23,7 @@ interface WidgetProps {
   embedId: string;
   apiUrl: string;
   autoOpen: boolean;
+  isIframe?: boolean;
   onReady?: () => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -33,18 +34,47 @@ export function Widget({
   embedId,
   apiUrl,
   autoOpen,
+  isIframe = false,
   onReady,
   onOpen,
   onClose,
   onMessage,
 }: WidgetProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(isIframe); // iframe mode: always open
   const [unreadCount, setUnreadCountState] = useState<number>(() => getUnreadCount(embedId));
   const { config, loading: configLoading, error: configError, errorCode: configErrorCode } = useConfig(apiUrl, embedId);
   const chat = useChat(apiUrl, embedId, config);
 
   const prevMessagesLenRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
+
+  // iframe mode: listen for postMessage from parent
+  useEffect(() => {
+    if (!isIframe) return;
+    const handler = (e: MessageEvent) => {
+      if (!e.data?.type?.startsWith('mb:')) return;
+      switch (e.data.type) {
+        case 'mb:open':
+          setIsOpen(true);
+          break;
+        case 'mb:close':
+          setIsOpen(false);
+          break;
+        case 'mb:destroy':
+          // Cleanup could go here if needed
+          break;
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [isIframe]);
+
+  // iframe mode: notify parent of unread count changes
+  useEffect(() => {
+    if (isIframe) {
+      window.parent.postMessage({ type: 'mb:badge', count: unreadCount }, '*');
+    }
+  }, [isIframe, unreadCount]);
 
   // Reset unread when widget opens
   useEffect(() => {
@@ -209,9 +239,14 @@ export function Widget({
   }, [isOpen, onOpen, onClose]);
 
   const handleClose = useCallback(() => {
-    setIsOpen(false);
-    onClose?.();
-  }, [onClose]);
+    if (isIframe) {
+      // Tell parent to hide the iframe
+      window.parent.postMessage({ type: 'mb:close' }, '*');
+    } else {
+      setIsOpen(false);
+      onClose?.();
+    }
+  }, [isIframe, onClose]);
 
   // ─── Voice Call State ──────────────────────────────────────────────
   const [voiceState, setVoiceState] = useState<VoiceCallState>('idle');
@@ -335,22 +370,25 @@ export function Widget({
 
   return (
     <div
-      class="mb-widget"
+      class={`mb-widget ${isIframe ? 'mb-widget-iframe' : ''}`}
       style={{ '--primary-color': config.primary_color } as any}
     >
-      <ChatButton
-        onClick={handleToggle}
-        isOpen={isOpen}
-        buttonColor={config.button_color || config.primary_color}
-        chatIcon={config.chat_icon || 'chat-circle-dots'}
-        widgetPosition={config.widget_position || 'bottom-right'}
-        bubbleSize={config.bubble_size || '60px'}
-        unreadCount={config.badge_enabled === false ? 0 : unreadCount}
-        badgeColor={config.badge_color || '#ef4444'}
-        badgeAnimation={config.badge_animation || 'bounce'}
-      />
+      {!isIframe && (
+        <ChatButton
+          onClick={handleToggle}
+          isOpen={isOpen}
+          buttonColor={config.button_color || config.primary_color}
+          chatIcon={config.chat_icon || 'chat-circle-dots'}
+          widgetPosition={config.widget_position || 'bottom-right'}
+          bubbleSize={config.bubble_size || '60px'}
+          unreadCount={config.badge_enabled === false ? 0 : unreadCount}
+          badgeColor={config.badge_color || '#ef4444'}
+          badgeAnimation={config.badge_animation || 'bounce'}
+        />
+      )}
       <ChatWindow
-        isOpen={isOpen}
+        isOpen={isIframe || isOpen}
+        isIframe={isIframe}
         config={config}
         chat={chat}
         onClose={handleClose}

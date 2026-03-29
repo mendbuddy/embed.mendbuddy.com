@@ -17,8 +17,12 @@ export function loadVoiceBundle(baseUrl: string): Promise<void> {
   if (loadPromise) return loadPromise;
 
   loadPromise = new Promise<void>((resolve, reject) => {
-    // Determine voice.js URL relative to chat.js
-    const voiceUrl = baseUrl.replace(/\/chat\.js$/, '/voice.js');
+    // In iframe context, load voice.js from same directory as widget.js
+    // In direct context, load relative to chat.js
+    const isIframe = window.location.hostname === 'embed.mendbuddy.com';
+    const voiceUrl = isIframe
+      ? `${window.location.origin}/w/voice.js`
+      : baseUrl.replace(/\/chat\.js$/, '/voice.js');
 
     const script = document.createElement('script');
     script.src = voiceUrl;

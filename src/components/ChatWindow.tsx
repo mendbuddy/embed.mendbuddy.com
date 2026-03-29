@@ -13,6 +13,7 @@ import { VoiceCallOverlay } from './VoiceCallOverlay';
 
 interface ChatWindowProps {
   isOpen: boolean;
+  isIframe?: boolean;
   config: EmbedConfigPublic;
   chat: UseChatReturn;
   onClose: () => void;
@@ -38,6 +39,7 @@ const WINDOW_POSITIONS: Record<string, Record<string, string>> = {
 
 export function ChatWindow({
   isOpen,
+  isIframe = false,
   config,
   chat,
   onClose,
@@ -62,16 +64,25 @@ export function ChatWindow({
 
   const posStyle = WINDOW_POSITIONS[config.widget_position] || WINDOW_POSITIONS['bottom-right'];
 
-  const windowStyle = {
-    width: config.window_width || '380px',
-    height: config.window_height || '600px',
-    maxHeight: 'calc(100vh - 110px)',
-    fontSize: config.text_size || '14px',
-    ...posStyle,
-  };
+  const windowStyle = isIframe
+    ? {
+        width: '100%',
+        height: '100%',
+        maxHeight: '100%',
+        fontSize: config.text_size || '14px',
+        position: 'relative' as const,
+        borderRadius: '0',
+      }
+    : {
+        width: config.window_width || '380px',
+        height: config.window_height || '600px',
+        maxHeight: 'calc(100vh - 110px)',
+        fontSize: config.text_size || '14px',
+        ...posStyle,
+      };
 
   return (
-    <div class={`mb-window ${isOpen ? 'open' : ''}`} style={windowStyle}>
+    <div class={`mb-window ${isIframe ? 'open mb-window-iframe' : isOpen ? 'open' : ''}`} style={windowStyle}>
       <Header
         assistantName={config.assistant_name}
         brandImageUrl={config.brand_image_url}
