@@ -140,8 +140,13 @@ export class VoiceCall {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voiceName } },
         },
         systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
+        inputAudioTranscription: {} as any,
+        outputAudioTranscription: {} as any,
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+          },
+        },
       },
       tools: [{
         functionDeclarations: [{
@@ -159,20 +164,24 @@ export class VoiceCall {
           },
         }],
       }],
+      callbacks: {
+        onopen: () => {
+          console.log('[VoiceCall] Session opened');
+        },
+        onmessage: (message: any) => this.handleMessage(message),
+        onerror: (err: any) => {
+          console.error('[VoiceCall] Session error:', err);
+          this.callbacks.onError('Connection error');
+          this.disconnect('error');
+        },
+        onclose: () => {
+          console.log('[VoiceCall] Session closed');
+          if (!this.ended) {
+            this.disconnect('connection_lost');
+          }
+        },
+      },
     });
-
-    // Handle messages
-    this.session.on('message', (msg: any) => this.handleMessage(msg));
-    this.session.on('error', (err: any) => {
-      console.error('[VoiceCall] session error:', err);
-      this.callbacks.onError('Connection error');
-      this.disconnect('error');
-    });
-
-    this.callbacks.onStateChange('ready');
-
-    // Start mic capture
-    await this.startMicCapture();
   }
 
   // ─── Mic capture with AudioWorklet ───────────────────────────────────
@@ -227,8 +236,7 @@ export class VoiceCall {
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         const b64 = btoa(binary);
         this.session.sendRealtimeInput({
-          data: b64,
-          mimeType: 'audio/pcm;rate=16000',
+          audio: { data: b64, mimeType: 'audio/pcm;rate=16000' },
         });
       }
     };
@@ -243,29 +251,21 @@ export class VoiceCall {
   private async handleMessage(msg: any): Promise<void> {
     if (this.ended) return;
 
-    // Audio data → playback
-    if (msg.data?.modelTurn?.parts) {
-      for (const part of msg.data.modelTurn.parts) {
-        if (part.inlineData?.data) {
-          this.callbacks.onStateChange('speaking');
-          this.playAudio(part.inlineData.data);
-        }
-      }
+    // Setup complete
+    if (msg.setupComplete) {
+      console.log('[VoiceCall] Setup complete');
+      this.callbacks.onStateChange('ready');
+      this.startMicCapture().catch((err) => {
+        console.error('[VoiceCall] Mic capture failed:', err);
+        this.callbacks.onError('Microphone access failed');
+        this.disconnect('error');
+      });
+      return;
     }
 
-    // Transcription events
-    if (msg.data?.inputTranscription?.text) {
-      this.userTranscript = msg.data.inputTranscription.text;
-      this.callbacks.onTranscript('user', this.userTranscript, true);
-    }
-    if (msg.data?.outputTranscription?.text) {
-      this.modelTranscript += msg.data.outputTranscription.text;
-      this.callbacks.onTranscript('assistant', this.modelTranscript, true);
-    }
-
-    // Tool call (RAG)
-    if (msg.data?.toolCall) {
-      for (const fc of msg.data.toolCall.functionCalls || []) {
+    // Tool call (RAG) — handle before serverContent
+    if (msg.toolCall) {
+      for (const fc of msg.toolCall.functionCalls || []) {
         if (fc.name === 'search_knowledge_base') {
           const query = fc.args?.query || '';
           try {
@@ -298,29 +298,52 @@ export class VoiceCall {
       }
     }
 
-    // Turn complete
-    if (msg.data?.turnComplete) {
-      this.turnCount++;
-      this.callbacks.onStateChange('listening');
+    // Server content (audio, transcription, turn complete)
+    if (msg.serverContent) {
+      const sc = msg.serverContent;
 
-      // Save turn to backend
-      if (this.userTranscript || this.modelTranscript) {
-        this.saveTurn(this.userTranscript, this.modelTranscript);
-        // Finalize transcripts
-        if (this.userTranscript) {
-          this.callbacks.onTranscript('user', this.userTranscript, false);
-        }
-        if (this.modelTranscript) {
-          this.callbacks.onTranscript('assistant', this.modelTranscript, false);
+      // Input transcription (user speech → text)
+      const inputT = sc.inputTranscription || sc.input_transcription;
+      if (inputT?.text) {
+        this.userTranscript += inputT.text;
+        this.callbacks.onTranscript('user', this.userTranscript, true);
+        this.callbacks.onStateChange('listening');
+      }
+
+      // Output transcription (model speech → text)
+      const outputT = sc.outputTranscription || sc.output_transcription;
+      if (outputT?.text) {
+        this.modelTranscript += outputT.text;
+        this.callbacks.onTranscript('assistant', this.modelTranscript, true);
+      }
+
+      // Audio from model
+      if (sc.modelTurn?.parts) {
+        for (const part of sc.modelTurn.parts) {
+          if (part.inlineData?.data) {
+            this.callbacks.onStateChange('speaking');
+            this.playAudio(part.inlineData.data);
+          }
         }
       }
-      this.userTranscript = '';
-      this.modelTranscript = '';
-    }
 
-    // Setup complete
-    if (msg.data?.setupComplete) {
-      this.callbacks.onStateChange('ready');
+      // Turn complete
+      if ('turnComplete' in sc) {
+        this.turnCount++;
+        this.callbacks.onStateChange('listening');
+
+        if (this.userTranscript || this.modelTranscript) {
+          this.saveTurn(this.userTranscript, this.modelTranscript);
+          if (this.userTranscript) {
+            this.callbacks.onTranscript('user', this.userTranscript, false);
+          }
+          if (this.modelTranscript) {
+            this.callbacks.onTranscript('assistant', this.modelTranscript, false);
+          }
+        }
+        this.userTranscript = '';
+        this.modelTranscript = '';
+      }
     }
   }
 
