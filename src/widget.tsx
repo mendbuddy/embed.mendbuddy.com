@@ -40,7 +40,7 @@ export function Widget({
   onClose,
   onMessage,
 }: WidgetProps) {
-  const [isOpen, setIsOpen] = useState(isIframe); // iframe mode: always open
+  const [isOpen, setIsOpen] = useState(false); // starts closed — parent sends mb:open
   const [unreadCount, setUnreadCountState] = useState<number>(() => getUnreadCount(embedId));
   const { config, loading: configLoading, error: configError, errorCode: configErrorCode } = useConfig(apiUrl, embedId);
   const chat = useChat(apiUrl, embedId, config);
