@@ -249,16 +249,13 @@ export function Widget({
         throw new Error('Voice module not available');
       }
 
-      // Ensure we have an embed session (created on first message, but voice may be first interaction)
-      let sessionToken = getSessionToken(embedId);
-      if (!sessionToken) {
-        const { ApiClient } = await import('./api/client');
-        const client = new ApiClient(apiUrl, embedId);
-        const session = await client.createSession();
-        sessionToken = session.session_token;
-      }
+      // Pass existing session token if we have one (voice/init will create one if not)
+      const existingSessionToken = getSessionToken(embedId);
 
-      const call = new VoiceModule.VoiceCall(apiUrl, embedId, sessionToken, {
+      // Pass existing threadId so voice continues the text conversation
+      const existingThreadId = chat.threadId;
+
+      const call = new VoiceModule.VoiceCall(apiUrl, embedId, existingSessionToken, {
         onStateChange: (state: VoiceCallState) => setVoiceState(state),
         onTranscript: (role: 'user' | 'assistant', text: string, partial?: boolean) => {
           setVoiceTranscript((prev) => {
@@ -289,7 +286,7 @@ export function Widget({
           setVoiceState('error');
         },
         onEnd: () => {},
-      });
+      }, existingThreadId);
 
       voiceCallRef.current = call;
 

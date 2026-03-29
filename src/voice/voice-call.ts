@@ -30,7 +30,8 @@ export class VoiceCall {
   private callbacks: VoiceCallCallbacks;
   private apiUrl: string;
   private embedId: string;
-  private sessionToken: string;
+  private sessionToken: string | null;
+  private existingThreadId: string | null = null;
 
   private session: any = null;
   private captureContext: AudioContext | null = null;
@@ -51,31 +52,50 @@ export class VoiceCall {
   constructor(
     apiUrl: string,
     embedId: string,
-    sessionToken: string,
-    callbacks: VoiceCallCallbacks
+    sessionToken: string | null,
+    callbacks: VoiceCallCallbacks,
+    existingThreadId?: string | null
   ) {
     this.apiUrl = apiUrl;
     this.embedId = embedId;
     this.sessionToken = sessionToken;
     this.callbacks = callbacks;
+    this.existingThreadId = existingThreadId || null;
   }
 
   // ─── Init: Call backend to get Gemini config ─────────────────────────
   async init(): Promise<{ allowed: boolean; reason?: string }> {
     this.callbacks.onStateChange('loading');
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.sessionToken) {
+      headers['X-Embed-Session'] = this.sessionToken;
+    }
+
     const res = await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/init`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Embed-Session': this.sessionToken,
-      },
+      headers,
+      body: JSON.stringify({
+        threadId: this.existingThreadId || undefined,
+      }),
     });
 
     const data = await res.json() as any;
 
     if (!data.allowed) {
       return { allowed: false, reason: data.reason || 'unavailable' };
+    }
+
+    // Store session token if server created one for us
+    if (data.sessionToken && !this.sessionToken) {
+      this.sessionToken = data.sessionToken;
+      // Persist to localStorage so subsequent requests use it
+      try {
+        const key = `mendbuddy_session_${this.embedId}`;
+        localStorage.setItem(key, data.sessionToken);
+      } catch { /* ignore */ }
     }
 
     this.config = {
