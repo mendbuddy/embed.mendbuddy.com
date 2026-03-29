@@ -65,6 +65,9 @@ export interface EmbedConfigPublic {
   kiosk_idle_timeout_seconds: number | null;
   kiosk_reset_session: boolean;
   show_reset_button: boolean;
+  voice_enabled: boolean;
+  voice_button_color: string | null;
+  voice_button_icon: string;
 }
 
 export interface Message {
@@ -91,6 +94,27 @@ export interface ChatResponse {
     created_at: string;
   };
   sources?: Source[];
+}
+
+export type VoiceCallState =
+  | 'idle'
+  | 'confirming'
+  | 'loading'
+  | 'connecting'
+  | 'ready'
+  | 'listening'
+  | 'speaking'
+  | 'ended'
+  | 'exhausted'
+  | 'error';
+
+export interface VoiceCallCallbacks {
+  onStateChange: (state: VoiceCallState) => void;
+  onTranscript: (role: 'user' | 'assistant', text: string, partial?: boolean) => void;
+  onMicVolume: (level: number) => void;
+  onPlaybackVolume: (level: number) => void;
+  onError: (message: string) => void;
+  onEnd: (reason: string) => void;
 }
 
 export interface MendBuddyConfig {

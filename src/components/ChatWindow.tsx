@@ -3,18 +3,30 @@
 // ============================================================================
 
 import { h } from 'preact';
-import type { EmbedConfigPublic, UseChatReturn } from '../types';
+import type { EmbedConfigPublic, UseChatReturn, VoiceCallState } from '../types';
 import { Header } from './Header';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { PreChatForm } from './PreChatForm';
 import { PoweredBy } from './PoweredBy';
+import { VoiceCallOverlay } from './VoiceCallOverlay';
 
 interface ChatWindowProps {
   isOpen: boolean;
   config: EmbedConfigPublic;
   chat: UseChatReturn;
   onClose: () => void;
+  voiceState?: VoiceCallState;
+  voiceMicVolume?: number;
+  voicePlaybackVolume?: number;
+  voiceMuted?: boolean;
+  voiceTranscript?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  isMobile?: boolean;
+  onVoiceCallStart?: () => void;
+  onVoiceConfirm?: () => void;
+  onVoiceCancel?: () => void;
+  onVoiceMuteToggle?: () => void;
+  onVoiceHangUp?: () => void;
 }
 
 const WINDOW_POSITIONS: Record<string, Record<string, string>> = {
@@ -29,6 +41,17 @@ export function ChatWindow({
   config,
   chat,
   onClose,
+  voiceState = 'idle',
+  voiceMicVolume = 0,
+  voicePlaybackVolume = 0,
+  voiceMuted = false,
+  voiceTranscript = [],
+  isMobile = false,
+  onVoiceCallStart,
+  onVoiceConfirm,
+  onVoiceCancel,
+  onVoiceMuteToggle,
+  onVoiceHangUp,
 }: ChatWindowProps) {
   const needsPreChat =
     config.pre_chat_enabled &&
@@ -58,9 +81,28 @@ export function ChatWindow({
         showResetButton={config.show_reset_button ?? false}
         onReset={chat.resetSession}
         onClose={onClose}
+        voiceEnabled={config.voice_enabled && voiceState === 'idle'}
+        voiceButtonColor={config.voice_button_color}
+        voiceButtonIcon={config.voice_button_icon}
+        onVoiceCall={onVoiceCallStart}
       />
 
-      {showOffline ? (
+      {voiceState !== 'idle' && onVoiceConfirm && onVoiceCancel && onVoiceMuteToggle && onVoiceHangUp ? (
+        <VoiceCallOverlay
+          state={voiceState}
+          assistantName={config.assistant_name || 'AI Assistant'}
+          primaryColor={config.primary_color}
+          micVolume={voiceMicVolume}
+          playbackVolume={voicePlaybackVolume}
+          isMuted={voiceMuted}
+          transcript={voiceTranscript}
+          onConfirm={onVoiceConfirm}
+          onCancel={onVoiceCancel}
+          onMuteToggle={onVoiceMuteToggle}
+          onHangUp={onVoiceHangUp}
+          isMobile={isMobile}
+        />
+      ) : showOffline ? (
         <div class="mb-offline">
           <div class="mb-offline-icon">
             <svg viewBox="0 0 24 24" width="48" height="48" fill="#9ca3af">

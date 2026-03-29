@@ -13,8 +13,11 @@ import {
   setUnreadCount,
   getLastSeenTimestamp,
   setLastSeenTimestamp,
+  getSessionToken,
 } from './storage/session';
 import { STORAGE_KEY_PREFIX } from './constants';
+import { loadVoiceBundle, getVoiceModule } from './voice/loader';
+import type { VoiceCallState } from './types';
 
 interface WidgetProps {
   embedId: string;
@@ -210,6 +213,110 @@ export function Widget({
     onClose?.();
   }, [onClose]);
 
+  // ─── Voice Call State ──────────────────────────────────────────────
+  const [voiceState, setVoiceState] = useState<VoiceCallState>('idle');
+  const [voiceMicVolume, setVoiceMicVolume] = useState(0);
+  const [voicePlaybackVolume, setVoicePlaybackVolume] = useState(0);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+  const voiceCallRef = useRef<any>(null);
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  const handleVoiceCallStart = useCallback(() => {
+    setVoiceState('confirming');
+  }, []);
+
+  const handleVoiceCancel = useCallback(() => {
+    setVoiceState('idle');
+    setVoiceTranscript([]);
+    setVoiceMicVolume(0);
+    setVoicePlaybackVolume(0);
+    setVoiceMuted(false);
+    voiceCallRef.current = null;
+  }, []);
+
+  const handleVoiceConfirm = useCallback(async () => {
+    setVoiceState('loading');
+    try {
+      // Determine script URL from the embed script tag
+      const scriptEl = document.querySelector('script[data-embed-id]') as HTMLScriptElement;
+      const baseUrl = scriptEl?.src || `${apiUrl.replace('/api', '')}/v1/chat.js`;
+      await loadVoiceBundle(baseUrl);
+
+      const VoiceModule = getVoiceModule();
+      if (!VoiceModule?.VoiceCall) {
+        throw new Error('Voice module not available');
+      }
+
+      const sessionToken = getSessionToken(embedId);
+      if (!sessionToken) {
+        throw new Error('No session token');
+      }
+
+      const call = new VoiceModule.VoiceCall(apiUrl, embedId, sessionToken, {
+        onStateChange: (state: VoiceCallState) => setVoiceState(state),
+        onTranscript: (role: 'user' | 'assistant', text: string, partial?: boolean) => {
+          setVoiceTranscript((prev) => {
+            if (partial) {
+              // Update last entry for this role or add new
+              const lastIdx = prev.length - 1;
+              if (lastIdx >= 0 && prev[lastIdx].role === role) {
+                const updated = [...prev];
+                updated[lastIdx] = { role, text };
+                return updated;
+              }
+              return [...prev, { role, text }];
+            }
+            // Final transcript — ensure it's in the list
+            const lastIdx = prev.length - 1;
+            if (lastIdx >= 0 && prev[lastIdx].role === role) {
+              const updated = [...prev];
+              updated[lastIdx] = { role, text };
+              return updated;
+            }
+            return [...prev, { role, text }];
+          });
+        },
+        onMicVolume: (level: number) => setVoiceMicVolume(level),
+        onPlaybackVolume: (level: number) => setVoicePlaybackVolume(level),
+        onError: (message: string) => {
+          console.error('[MendBuddy Voice]', message);
+          setVoiceState('error');
+        },
+        onEnd: () => {},
+      });
+
+      voiceCallRef.current = call;
+
+      const initResult = await call.init();
+      if (!initResult.allowed) {
+        setVoiceState(initResult.reason === 'minutes_exhausted' ? 'exhausted' : 'error');
+        return;
+      }
+
+      await call.connect();
+    } catch (err) {
+      console.error('[MendBuddy Voice] Error:', err);
+      setVoiceState('error');
+    }
+  }, [apiUrl, embedId]);
+
+  const handleVoiceMuteToggle = useCallback(() => {
+    if (!voiceCallRef.current) return;
+    if (voiceMuted) {
+      voiceCallRef.current.unmute();
+      setVoiceMuted(false);
+    } else {
+      voiceCallRef.current.mute();
+      setVoiceMuted(true);
+    }
+  }, [voiceMuted]);
+
+  const handleVoiceHangUp = useCallback(() => {
+    voiceCallRef.current?.disconnect('user_ended');
+  }, []);
+
   // Don't render if loading or config failed
   if (configLoading) {
     return <Fragment />;
@@ -246,6 +353,17 @@ export function Widget({
         config={config}
         chat={chat}
         onClose={handleClose}
+        voiceState={voiceState}
+        voiceMicVolume={voiceMicVolume}
+        voicePlaybackVolume={voicePlaybackVolume}
+        voiceMuted={voiceMuted}
+        voiceTranscript={voiceTranscript}
+        isMobile={isMobile}
+        onVoiceCallStart={handleVoiceCallStart}
+        onVoiceConfirm={handleVoiceConfirm}
+        onVoiceCancel={handleVoiceCancel}
+        onVoiceMuteToggle={handleVoiceMuteToggle}
+        onVoiceHangUp={handleVoiceHangUp}
       />
     </div>
   );

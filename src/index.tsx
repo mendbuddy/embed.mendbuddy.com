@@ -747,6 +747,212 @@ function getStyles(): string {
       text-decoration: underline;
     }
 
+    /* ========== Voice Call ========== */
+    .mb-header-voice {
+      padding: 8px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .mb-header-voice:hover {
+      background-color: #f0f0f0;
+      transform: scale(1.1);
+    }
+    .mb-voice-overlay {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .mb-voice-active {
+      justify-content: flex-start;
+      padding-top: 32px;
+    }
+    .mb-voice-confirm {
+      text-align: center;
+      color: #374151;
+    }
+    .mb-voice-confirm h3 {
+      margin: 16px 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .mb-voice-confirm p {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .mb-voice-mobile-warning {
+      font-size: 12px !important;
+      color: #d97706 !important;
+      font-style: italic;
+    }
+    .mb-voice-confirm-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .mb-voice-btn-cancel {
+      padding: 10px 24px;
+      border: 1px solid #d1d5db;
+      background: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #374151;
+    }
+    .mb-voice-btn-cancel:hover {
+      background: #f3f4f6;
+    }
+    .mb-voice-btn-call {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mb-voice-btn-call:hover {
+      opacity: 0.9;
+    }
+    .mb-voice-ring-container {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mb-voice-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .mb-voice-ring-pulse {
+      animation: mb-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes mb-pulse {
+      0%, 100% { opacity: 0.5; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .mb-voice-ring-icon {
+      position: relative;
+      z-index: 1;
+    }
+    .mb-voice-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .mb-voice-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: mb-dot-bounce 1.4s ease-in-out infinite;
+    }
+    .mb-voice-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .mb-voice-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes mb-dot-bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .mb-voice-info {
+      text-align: center;
+    }
+    .mb-voice-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .mb-voice-status {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .mb-voice-timer {
+      font-size: 24px;
+      font-weight: 300;
+      color: #374151;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .mb-voice-transcript {
+      width: 100%;
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      font-size: 13px;
+      color: #4b5563;
+      max-height: 200px;
+    }
+    .mb-voice-turn {
+      padding: 4px 0;
+    }
+    .mb-voice-turn-label {
+      font-weight: 600;
+      color: #111827;
+    }
+    .mb-voice-turn-user {
+      color: #6b7280;
+    }
+    .mb-voice-controls {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 0 8px;
+    }
+    .mb-voice-mute {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid #d1d5db;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #374151;
+      transition: all 0.2s;
+    }
+    .mb-voice-mute:hover {
+      background: #f3f4f6;
+    }
+    .mb-voice-muted {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
+    .mb-voice-hangup {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: #dc2626;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      transition: all 0.2s;
+    }
+    .mb-voice-hangup:hover {
+      background: #b91c1c;
+    }
+
     /* ========== Mobile Responsive ========== */
     @media (max-width: 480px) {
       .mb-window {
