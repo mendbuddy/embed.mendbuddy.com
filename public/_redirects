@@ -1,1 +1,1 @@
-/w/:embedId /w/index.html 200
+/w/emb_* /w/_app 200

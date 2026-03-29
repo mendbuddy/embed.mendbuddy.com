@@ -83,9 +83,9 @@ async function build() {
       console.log('Skipping voice bundle');
     }
 
-    // Copy iframe HTML
-    fs.copyFileSync('src/widget-frame.html', 'dist/w/index.html');
-    console.log('Copied widget-frame.html to dist/w/index.html');
+    // Copy iframe HTML — use _app.html to avoid Cloudflare Pages index.html auto-redirect
+    fs.copyFileSync('src/widget-frame.html', 'dist/w/_app.html');
+    console.log('Copied widget-frame.html to dist/w/_app.html');
 
     // Legacy compat
     fs.copyFileSync('dist/v1/chat.js', 'dist/mendbuddy-chat-widget.js');
