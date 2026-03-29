@@ -1,16 +1,10 @@
 // ============================================================================
-// VoiceCall — Core voice call class for embed widget
-// Ported from GeminiLivePlayground with mobile browser mitigations.
-// Uses Google GenAI SDK for direct WebSocket to Gemini Live API.
+// VoiceCall — Plain WebSocket client for embed voice calls
+// Connects to the server-side DO proxy (no direct Gemini connection).
+// No API key, no system instruction, no @google/genai SDK needed.
 // ============================================================================
 
-import { GoogleGenAI, Modality, Type } from '@google/genai';
-
 interface VoiceCallConfig {
-  apiKey: string;
-  model: string;
-  systemInstruction: string;
-  voiceName: string;
   threadId: string;
   buddyName: string;
   companyName: string;
@@ -33,7 +27,7 @@ export class VoiceCall {
   private sessionToken: string | null;
   private existingThreadId: string | null = null;
 
-  private session: any = null;
+  private ws: WebSocket | null = null;
   private captureContext: AudioContext | null = null;
   private playbackContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
@@ -41,10 +35,6 @@ export class VoiceCall {
   private scheduledTime = 0;
 
   private startTime = 0;
-  private turnCount = 0;
-  private userTranscript = '';
-  private modelTranscript = '';
-
   private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
   private wakeLock: any = null;
   private ended = false;
@@ -63,55 +53,56 @@ export class VoiceCall {
     this.existingThreadId = existingThreadId || null;
   }
 
-  // ─── Init: Call backend to get Gemini config ─────────────────────────
+  // ─── Init + Connect via WebSocket ────────────────────────────────────
   async init(): Promise<{ allowed: boolean; reason?: string }> {
     this.callbacks.onStateChange('loading');
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (this.sessionToken) {
-      headers['X-Embed-Session'] = this.sessionToken;
+    // Build WebSocket URL — the server does all the setup (session, prompt, Gemini connection)
+    const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
+    const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
+    let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
+
+    if (this.existingThreadId) {
+      wsUrl += `?threadId=${encodeURIComponent(this.existingThreadId)}`;
     }
 
-    const res = await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/init`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        threadId: this.existingThreadId || undefined,
-      }),
-    });
+    // Check if voice is available before upgrading (can't send JSON error over WS upgrade)
+    // Do a preflight check via the init endpoint
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.sessionToken) headers['X-Embed-Session'] = this.sessionToken;
 
-    const data = await res.json() as any;
+      const preCheck = await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/init`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ threadId: this.existingThreadId || undefined }),
+      });
+      const preData = await preCheck.json() as any;
 
-    if (!data.allowed) {
-      return { allowed: false, reason: data.reason || 'unavailable' };
+      if (!preData.allowed) {
+        return { allowed: false, reason: preData.reason || 'unavailable' };
+      }
+
+      // Store session token if server created one
+      if (preData.sessionToken && !this.sessionToken) {
+        this.sessionToken = preData.sessionToken;
+        try {
+          localStorage.setItem(`mendbuddy_session_${this.embedId}`, preData.sessionToken);
+        } catch {}
+      }
+
+      this.config = {
+        threadId: preData.threadId,
+        buddyName: preData.buddyName,
+        companyName: preData.companyName,
+      };
+    } catch (err) {
+      return { allowed: false, reason: 'network_error' };
     }
-
-    // Store session token if server created one for us
-    if (data.sessionToken && !this.sessionToken) {
-      this.sessionToken = data.sessionToken;
-      // Persist to localStorage so subsequent requests use it
-      try {
-        const key = `mendbuddy_session_${this.embedId}`;
-        localStorage.setItem(key, data.sessionToken);
-      } catch { /* ignore */ }
-    }
-
-    this.config = {
-      apiKey: data.apiKey,
-      model: data.model,
-      systemInstruction: data.systemInstruction,
-      voiceName: data.voiceName,
-      threadId: data.threadId,
-      buddyName: data.buddyName,
-      companyName: data.companyName,
-    };
 
     return { allowed: true };
   }
 
-  // ─── Connect: Establish Gemini Live session + mic capture ────────────
   async connect(): Promise<void> {
     if (!this.config) throw new Error('Call init() first');
 
@@ -119,69 +110,93 @@ export class VoiceCall {
     this.startTime = Date.now();
     this.ended = false;
 
-    // Request wake lock (Android Chrome — prevents screen dimming)
     this.requestWakeLock();
-
-    // Listen for visibility changes (mobile backgrounding)
     this.setupVisibilityHandler();
 
-    // Create audio contexts
+    // Create playback context
     this.playbackContext = new AudioContext();
     this.scheduledTime = this.playbackContext.currentTime;
 
-    // Connect to Gemini
-    const client = new GoogleGenAI({ apiKey: this.config.apiKey });
+    // Connect WebSocket to our DO proxy (NOT to Gemini directly)
+    const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
+    const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
+    let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
+    if (this.existingThreadId) {
+      wsUrl += `?threadId=${encodeURIComponent(this.existingThreadId)}`;
+    }
 
-    this.session = await client.live.connect({
-      model: this.config.model,
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voiceName } },
-        },
-        systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
-        inputAudioTranscription: {} as any,
-        outputAudioTranscription: {} as any,
-        realtimeInputConfig: {
-          automaticActivityDetection: {
-            disabled: false,
-          },
-        },
-      },
-      tools: [{
-        functionDeclarations: [{
-          name: 'search_knowledge_base',
-          description: 'Search the business knowledge base for pricing, services, repair information, buyback values, device availability, or any specific business information.',
-          parameters: {
-            type: Type.OBJECT,
-            properties: {
-              query: {
-                type: Type.STRING,
-                description: 'A search query rewritten from the customer question',
-              },
-            },
-            required: ['query'],
-          },
-        }],
-      }],
-      callbacks: {
-        onopen: () => {
-          console.log('[VoiceCall] Session opened');
-        },
-        onmessage: (message: any) => this.handleMessage(message),
-        onerror: (err: any) => {
-          console.error('[VoiceCall] Session error:', err);
-          this.callbacks.onError('Connection error');
-          this.disconnect('error');
-        },
-        onclose: () => {
-          console.log('[VoiceCall] Session closed');
-          if (!this.ended) {
-            this.disconnect('connection_lost');
-          }
-        },
-      },
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onmessage = (event) => {
+      if (typeof event.data !== 'string') return;
+      try {
+        const msg = JSON.parse(event.data);
+        this.handleServerMessage(msg);
+      } catch {}
+    };
+
+    this.ws.onerror = () => {
+      this.callbacks.onError('Connection error');
+      this.disconnect('error');
+    };
+
+    this.ws.onclose = () => {
+      if (!this.ended) {
+        this.disconnect('connection_lost');
+      }
+    };
+
+    // Wait for WebSocket to open
+    await new Promise<void>((resolve, reject) => {
+      if (!this.ws) return reject(new Error('No WebSocket'));
+      this.ws.onopen = () => resolve();
+      setTimeout(() => reject(new Error('WebSocket timeout')), 10000);
     });
+  }
+
+  // ─── Handle messages from DO proxy ──────────────────────────────────
+  private handleServerMessage(msg: any): void {
+    if (this.ended) return;
+
+    switch (msg.type) {
+      case 'ready':
+        this.callbacks.onStateChange('ready');
+        this.startMicCapture().catch((err) => {
+          console.error('[VoiceCall] Mic capture failed:', err);
+          this.callbacks.onError('Microphone access failed');
+          this.disconnect('error');
+        });
+        break;
+
+      case 'audio':
+        this.callbacks.onStateChange('speaking');
+        this.playAudio(msg.data);
+        break;
+
+      case 'transcript':
+        this.callbacks.onTranscript(
+          msg.speaker === 'user' ? 'user' : 'assistant',
+          msg.text,
+          msg.partial !== false
+        );
+        if (msg.speaker === 'user') {
+          this.callbacks.onStateChange('listening');
+        }
+        break;
+
+      case 'turn_complete':
+        this.callbacks.onStateChange('listening');
+        break;
+
+      case 'error':
+        this.callbacks.onError(msg.message || 'An error occurred');
+        this.disconnect('error');
+        break;
+
+      case 'ended':
+        this.disconnect(msg.reason || 'server_ended');
+        break;
+    }
   }
 
   // ─── Mic capture with AudioWorklet ───────────────────────────────────
@@ -192,7 +207,6 @@ export class VoiceCall {
 
     this.captureContext = new AudioContext({ sampleRate: 16000 });
 
-    // Register inline worklet
     const workletCode = `
       class CaptureProcessor extends AudioWorkletProcessor {
         constructor() { super(); this._buf = []; this._vol = 0; this._tick = 0; }
@@ -229,15 +243,13 @@ export class VoiceCall {
     this.workletNode.port.onmessage = (e) => {
       if (e.data.type === 'volume') {
         this.callbacks.onMicVolume(Math.min(1, e.data.level * 5));
-      } else if (e.data.type === 'audio' && this.session && !this.ended) {
-        // Convert Int16 PCM to base64
+      } else if (e.data.type === 'audio' && this.ws && this.ws.readyState === WebSocket.OPEN && !this.ended) {
         const bytes = new Uint8Array(e.data.pcm.buffer);
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         const b64 = btoa(binary);
-        this.session.sendRealtimeInput({
-          audio: { data: b64, mimeType: 'audio/pcm;rate=16000' },
-        });
+        // Send audio to DO proxy (DO forwards to Gemini)
+        this.ws.send(JSON.stringify({ type: 'audio', data: b64 }));
       }
     };
 
@@ -245,106 +257,6 @@ export class VoiceCall {
     this.workletNode.connect(this.captureContext.destination);
 
     this.callbacks.onStateChange('listening');
-  }
-
-  // ─── Handle Gemini messages ──────────────────────────────────────────
-  private async handleMessage(msg: any): Promise<void> {
-    if (this.ended) return;
-
-    // Setup complete
-    if (msg.setupComplete) {
-      console.log('[VoiceCall] Setup complete');
-      this.callbacks.onStateChange('ready');
-      this.startMicCapture().catch((err) => {
-        console.error('[VoiceCall] Mic capture failed:', err);
-        this.callbacks.onError('Microphone access failed');
-        this.disconnect('error');
-      });
-      return;
-    }
-
-    // Tool call (RAG) — handle before serverContent
-    if (msg.toolCall) {
-      for (const fc of msg.toolCall.functionCalls || []) {
-        if (fc.name === 'search_knowledge_base') {
-          const query = fc.args?.query || '';
-          try {
-            const res = await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/rag`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Embed-Session': this.sessionToken,
-              },
-              body: JSON.stringify({ query }),
-            });
-            const ragData = await res.json() as any;
-            this.session.sendToolResponse({
-              functionResponses: [{
-                id: fc.id,
-                name: fc.name,
-                response: { context: ragData.context || 'No results found.' },
-              }],
-            });
-          } catch (err) {
-            this.session.sendToolResponse({
-              functionResponses: [{
-                id: fc.id,
-                name: fc.name,
-                response: { context: 'Knowledge base lookup failed.' },
-              }],
-            });
-          }
-        }
-      }
-    }
-
-    // Server content (audio, transcription, turn complete)
-    if (msg.serverContent) {
-      const sc = msg.serverContent;
-
-      // Input transcription (user speech → text)
-      const inputT = sc.inputTranscription || sc.input_transcription;
-      if (inputT?.text) {
-        this.userTranscript += inputT.text;
-        this.callbacks.onTranscript('user', this.userTranscript, true);
-        this.callbacks.onStateChange('listening');
-      }
-
-      // Output transcription (model speech → text)
-      const outputT = sc.outputTranscription || sc.output_transcription;
-      if (outputT?.text) {
-        this.modelTranscript += outputT.text;
-        this.callbacks.onTranscript('assistant', this.modelTranscript, true);
-      }
-
-      // Audio from model
-      if (sc.modelTurn?.parts) {
-        for (const part of sc.modelTurn.parts) {
-          if (part.inlineData?.data) {
-            this.callbacks.onStateChange('speaking');
-            this.playAudio(part.inlineData.data);
-          }
-        }
-      }
-
-      // Turn complete
-      if ('turnComplete' in sc) {
-        this.turnCount++;
-        this.callbacks.onStateChange('listening');
-
-        if (this.userTranscript || this.modelTranscript) {
-          this.saveTurn(this.userTranscript, this.modelTranscript);
-          if (this.userTranscript) {
-            this.callbacks.onTranscript('user', this.userTranscript, false);
-          }
-          if (this.modelTranscript) {
-            this.callbacks.onTranscript('assistant', this.modelTranscript, false);
-          }
-        }
-        this.userTranscript = '';
-        this.modelTranscript = '';
-      }
-    }
   }
 
   // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
@@ -356,7 +268,6 @@ export class VoiceCall {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const pcm16 = new Int16Array(bytes.buffer);
 
-    // Convert to float32
     const float32 = new Float32Array(pcm16.length);
     for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768;
 
@@ -376,12 +287,11 @@ export class VoiceCall {
       resampled[i] = a + frac * (b - a);
     }
 
-    // Calculate volume for UI
+    // Volume for UI
     let sum = 0;
     for (let i = 0; i < resampled.length; i++) sum += resampled[i] * resampled[i];
     this.callbacks.onPlaybackVolume(Math.min(1, Math.sqrt(sum / resampled.length) * 5));
 
-    // Schedule playback
     const buffer = this.playbackContext.createBuffer(1, resampled.length, outputRate);
     buffer.copyToChannel(resampled, 0);
     const source = this.playbackContext.createBufferSource();
@@ -394,49 +304,19 @@ export class VoiceCall {
     this.scheduledTime = startAt + buffer.duration;
   }
 
-  // ─── Save turn to backend ────────────────────────────────────────────
-  private async saveTurn(userText: string, modelText: string): Promise<void> {
-    if (!this.config) return;
-    try {
-      await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/turn`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Embed-Session': this.sessionToken,
-        },
-        body: JSON.stringify({
-          threadId: this.config.threadId,
-          userTranscript: userText,
-          modelTranscript: modelText,
-        }),
-      });
-    } catch (err) {
-      console.error('[VoiceCall] Failed to save turn:', err);
-    }
-  }
-
   // ─── Mute/unmute ─────────────────────────────────────────────────────
   mute(): void {
-    if (this.mediaStream) {
-      this.mediaStream.getAudioTracks().forEach((t) => (t.enabled = false));
-    }
+    this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = false));
   }
 
   unmute(): void {
-    if (this.mediaStream) {
-      this.mediaStream.getAudioTracks().forEach((t) => (t.enabled = true));
-    }
+    this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = true));
   }
 
   // ─── Disconnect ──────────────────────────────────────────────────────
   async disconnect(reason = 'user_ended'): Promise<void> {
     if (this.ended) return;
     this.ended = true;
-
-    const durationSeconds = Math.round((Date.now() - this.startTime) / 1000);
-
-    // Close Gemini session
-    try { this.session?.close(); } catch {}
 
     // Stop mic
     if (this.mediaStream) {
@@ -456,33 +336,12 @@ export class VoiceCall {
       this.playbackContext = null;
     }
 
-    // Release wake lock
+    // Close WebSocket (DO handles cleanup, usage logging, call end)
+    try { this.ws?.close(1000, reason); } catch {}
+    this.ws = null;
+
     this.releaseWakeLock();
-
-    // Remove visibility handler
     this.removeVisibilityHandler();
-
-    // Log call end to backend
-    if (this.config) {
-      try {
-        await fetch(`${this.apiUrl}/embed/${this.embedId}/voice/end`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Embed-Session': this.sessionToken,
-          },
-          body: JSON.stringify({
-            threadId: this.config.threadId,
-            sessionId: `embed_${this.embedId}_${Date.now()}`,
-            durationSeconds,
-            totalTurns: this.turnCount,
-            endReason: reason,
-          }),
-        });
-      } catch (err) {
-        console.error('[VoiceCall] Failed to log call end:', err);
-      }
-    }
 
     this.callbacks.onStateChange(reason === 'error' ? 'error' : 'ended');
     this.callbacks.onEnd(reason);
@@ -492,12 +351,10 @@ export class VoiceCall {
 
   private visibilityHandler = () => {
     if (document.hidden) {
-      // Page went to background — start 15s grace timer
       this.visibilityTimer = setTimeout(() => {
         this.disconnect('background_timeout');
       }, 15000);
     } else {
-      // Page came back — cancel timer
       if (this.visibilityTimer) {
         clearTimeout(this.visibilityTimer);
         this.visibilityTimer = null;
@@ -522,15 +379,11 @@ export class VoiceCall {
       if ('wakeLock' in navigator) {
         this.wakeLock = await (navigator as any).wakeLock.request('screen');
       }
-    } catch {
-      // Wake Lock not supported or denied — ignore
-    }
+    } catch {}
   }
 
   private releaseWakeLock(): void {
-    try {
-      this.wakeLock?.release();
-    } catch {}
+    try { this.wakeLock?.release(); } catch {}
     this.wakeLock = null;
   }
 }

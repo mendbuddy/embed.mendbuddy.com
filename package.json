@@ -9,7 +9,6 @@
     "dev": "node build.js --watch"
   },
   "dependencies": {
-    "@google/genai": "^1.47.0",
     "preact": "^10.29.0"
   },
   "devDependencies": {
