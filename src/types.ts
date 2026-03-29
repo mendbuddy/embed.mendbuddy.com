@@ -68,6 +68,7 @@ export interface EmbedConfigPublic {
   voice_enabled: boolean;
   voice_button_color: string | null;
   voice_button_icon: string;
+  voice_accent_color: string | null;
 }
 
 export interface Message {

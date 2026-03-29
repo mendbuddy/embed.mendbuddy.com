@@ -91,7 +91,7 @@ export function ChatWindow({
         <VoiceCallOverlay
           state={voiceState}
           assistantName={config.assistant_name || 'AI Assistant'}
-          primaryColor={config.voice_button_color || config.primary_color}
+          primaryColor={config.voice_accent_color || config.primary_color}
           micVolume={voiceMicVolume}
           playbackVolume={voicePlaybackVolume}
           isMuted={voiceMuted}
