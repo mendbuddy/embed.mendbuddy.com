@@ -195,7 +195,7 @@ function createIframe(): void {
 
   const iframe = document.createElement('iframe');
   iframe.src = `${EMBED_ORIGIN}/w/${state.embedId}`;
-  iframe.allow = 'microphone';
+  iframe.allow = 'microphone; screen-wake-lock';
   iframe.setAttribute('aria-label', 'Chat widget');
 
   const isMobile = window.innerWidth <= 480;
