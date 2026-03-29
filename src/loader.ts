@@ -6,6 +6,8 @@
 // Communicates with the iframe via postMessage.
 // ============================================================================
 
+import { getIconSvg } from './icons';
+
 const API_URL = 'https://api.mendbuddy.com';
 const EMBED_ORIGIN = 'https://embed.mendbuddy.com';
 const STORAGE_PREFIX = 'mendbuddy_unread_';
@@ -178,10 +180,7 @@ function createButton(config: EmbedButtonConfig): void {
 }
 
 function getChatIcon(icon: string): string {
-  // Simple chat bubble SVG
-  return `<svg viewBox="0 0 256 256" width="60%" height="60%" fill="currentColor">
-    <path d="M216,48H40A16,16,0,0,0,24,64V224a15.85,15.85,0,0,0,9.24,14.5A16.13,16.13,0,0,0,40,240a15.89,15.89,0,0,0,10.25-3.78.69.69,0,0,0,.13-.11L82.5,208H216a16,16,0,0,0,16-16V64A16,16,0,0,0,216,48ZM216,192H82.5a16,16,0,0,0-10.3,3.75l-.12.11L40,224V64H216Z"/>
-  </svg>`;
+  return `<svg viewBox="0 0 256 256" width="60%" height="60%" fill="currentColor">${getIconSvg(icon)}</svg>`;
 }
 
 function updateBadge(count: number): void {
