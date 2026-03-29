@@ -78,6 +78,21 @@ async function fetchConfig(apiUrl: string, embedId: string): Promise<EmbedButton
 // ─── Button Rendering (plain DOM) ────────────────────────────────────
 
 function createButton(config: EmbedButtonConfig): void {
+  // Inject badge animation styles
+  if (!document.getElementById('mendbuddy-loader-styles')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'mendbuddy-loader-styles';
+    styleEl.textContent = `
+      @keyframes mb-badge-bounce { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+      @keyframes mb-badge-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+      @keyframes mb-badge-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
+      .mb-badge-bounce { animation: mb-badge-bounce 0.6s ease-in-out 3; }
+      .mb-badge-pulse { animation: mb-badge-pulse 1.5s ease-in-out infinite; }
+      .mb-badge-shake { animation: mb-badge-shake 0.4s ease-in-out 3; }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
   // Container
   const container = document.createElement('div');
   container.id = 'mendbuddy-chat-container';
@@ -175,8 +190,14 @@ function updateBadge(count: number): void {
   if (count > 0) {
     state.badge.textContent = count > 99 ? '99+' : String(count);
     state.badge.style.display = 'flex';
+    // Apply animation
+    const anim = state.config?.badge_animation || 'bounce';
+    if (anim !== 'none') {
+      state.badge.className = `mb-badge-${anim}`;
+    }
   } else {
     state.badge.style.display = 'none';
+    state.badge.className = '';
   }
   // Persist
   try {
@@ -244,6 +265,16 @@ function openWidget(): void {
   }
   if (state.iframe) {
     state.iframe.style.display = 'block';
+    state.iframe.style.opacity = '0';
+    state.iframe.style.transform = 'translateY(20px) scale(0.95)';
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      if (state.iframe) {
+        state.iframe.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        state.iframe.style.opacity = '1';
+        state.iframe.style.transform = 'translateY(0) scale(1)';
+      }
+    });
   }
 
   // Clear unread
@@ -254,9 +285,14 @@ function openWidget(): void {
     state.iframe.contentWindow.postMessage({ type: 'mb:open' }, EMBED_ORIGIN);
   }
 
-  // Hide button on mobile (close is inside iframe)
-  if (window.innerWidth <= 480 && state.container) {
-    state.container.style.display = 'none';
+  // Hide button (animate out)
+  if (state.container) {
+    state.container.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    state.container.style.opacity = '0';
+    state.container.style.transform = 'scale(0.5)';
+    setTimeout(() => {
+      if (state.container) state.container.style.display = 'none';
+    }, 200);
   }
 
   state.callbacks.onOpen?.();
@@ -266,13 +302,28 @@ function closeWidget(): void {
   if (!state.isOpen) return;
   state.isOpen = false;
 
+  // Animate iframe out
   if (state.iframe) {
-    state.iframe.style.display = 'none';
+    state.iframe.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    state.iframe.style.opacity = '0';
+    state.iframe.style.transform = 'translateY(20px) scale(0.95)';
+    setTimeout(() => {
+      if (state.iframe) state.iframe.style.display = 'none';
+    }, 200);
   }
 
-  // Show button again
+  // Show button (animate in)
   if (state.container) {
     state.container.style.display = 'block';
+    state.container.style.opacity = '0';
+    state.container.style.transform = 'scale(0.5)';
+    requestAnimationFrame(() => {
+      if (state.container) {
+        state.container.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        state.container.style.opacity = '1';
+        state.container.style.transform = 'scale(1)';
+      }
+    });
   }
 
   // Tell iframe we're closed
