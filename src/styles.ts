@@ -591,8 +591,7 @@ export function getStyles(): string {
       overflow-y: auto;
     }
     .mb-voice-active {
-      justify-content: flex-start;
-      padding-top: 32px;
+      justify-content: center;
     }
     .mb-voice-confirm {
       text-align: center;

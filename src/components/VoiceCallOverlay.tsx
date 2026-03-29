@@ -182,22 +182,26 @@ export function VoiceCallOverlay({
     );
   }
 
-  // Call ended
+  // Call ended — dismiss immediately back to text chat
+  // The voice messages are saved to the thread and will show in the chat history
   if (state === 'ended') {
+    // Auto-dismiss after a brief moment
+    useEffect(() => {
+      const t = setTimeout(onCancel, 500);
+      return () => clearTimeout(t);
+    }, []);
     return (
       <div class="mb-voice-overlay">
         <div class="mb-voice-confirm">
           <h3>Call ended</h3>
           <p>Duration: {formatDuration(duration)}</p>
-          <div class="mb-voice-confirm-buttons">
-            <button class="mb-voice-btn-cancel" onClick={onCancel}>Close</button>
-          </div>
         </div>
       </div>
     );
   }
 
   // Active call (loading, connecting, ready, listening, speaking)
+  // Centred mic visualiser, no live transcript
   const statusText = {
     loading: 'Loading...',
     connecting: 'Connecting...',
@@ -220,17 +224,6 @@ export function VoiceCallOverlay({
         <div class="mb-voice-status">{statusText}</div>
         <div class="mb-voice-timer">{formatDuration(duration)}</div>
       </div>
-
-      {transcript.length > 0 && (
-        <div class="mb-voice-transcript" ref={transcriptRef}>
-          {transcript.map((t, i) => (
-            <div key={i} class={`mb-voice-turn mb-voice-turn-${t.role}`}>
-              <span class="mb-voice-turn-label">{t.role === 'user' ? 'You' : assistantName}:</span>{' '}
-              {t.text}
-            </div>
-          ))}
-        </div>
-      )}
 
       <div class="mb-voice-controls">
         <button
