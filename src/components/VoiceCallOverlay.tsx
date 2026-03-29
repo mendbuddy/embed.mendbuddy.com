@@ -136,8 +136,7 @@ export function VoiceCallOverlay({
       <div class="mb-voice-overlay">
         <div class="mb-voice-confirm">
           <PhoneIcon size={40} />
-          <h3>Call {assistantName}?</h3>
-          <p>Start a voice conversation with our AI assistant.</p>
+          <h3>Start a voice conversation with {assistantName}?</h3>
           {isMobile && (
             <p class="mb-voice-mobile-warning">Please keep this page open during the call</p>
           )}

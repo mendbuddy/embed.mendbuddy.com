@@ -249,9 +249,13 @@ export function Widget({
         throw new Error('Voice module not available');
       }
 
-      const sessionToken = getSessionToken(embedId);
+      // Ensure we have an embed session (created on first message, but voice may be first interaction)
+      let sessionToken = getSessionToken(embedId);
       if (!sessionToken) {
-        throw new Error('No session token');
+        const { ApiClient } = await import('./api/client');
+        const client = new ApiClient(apiUrl, embedId);
+        const session = await client.createSession();
+        sessionToken = session.session_token;
       }
 
       const call = new VoiceModule.VoiceCall(apiUrl, embedId, sessionToken, {
