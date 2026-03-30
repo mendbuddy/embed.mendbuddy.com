@@ -15,6 +15,7 @@ interface ChatButtonProps {
   unreadCount: number;
   badgeColor: string;
   badgeAnimation: string;
+  scrollState?: 'idle' | 'hidden' | 'bouncing';
 }
 
 const BUTTON_POSITIONS: Record<string, Record<string, string>> = {
@@ -34,17 +35,27 @@ export function ChatButton({
   unreadCount,
   badgeColor,
   badgeAnimation,
+  scrollState = 'idle',
 }: ChatButtonProps) {
   const posStyle = BUTTON_POSITIONS[widgetPosition] || BUTTON_POSITIONS['bottom-right'];
   const animClass = badgeAnimation && badgeAnimation !== 'none' ? ` mb-badge-${badgeAnimation}` : '';
   const sizeNum = parseInt(bubbleSize) || 60;
   const iconSize = Math.round(sizeNum * 0.47); // scale icon proportionally
 
+  // Determine scroll-based CSS class
+  const scrollClass = scrollState === 'hidden' ? ' mb-button-scroll-hidden'
+    : scrollState === 'bouncing' ? ' mb-button-scroll-visible'
+    : '';
+
+  // Slide direction: bottom positions slide down, top positions slide up
+  const isTop = widgetPosition === 'top-right' || widgetPosition === 'top-left';
+  const hideY = isTop ? '-100px' : '100px';
+
   return (
     <button
-      class="mb-button"
+      class={`mb-button${scrollClass}`}
       onClick={onClick}
-      style={{ backgroundColor: buttonColor, width: `${sizeNum}px`, height: `${sizeNum}px`, ...posStyle }}
+      style={{ backgroundColor: buttonColor, width: `${sizeNum}px`, height: `${sizeNum}px`, '--mb-hide-y': hideY, ...posStyle } as any}
       aria-label={isOpen ? 'Close chat' : 'Open chat'}
     >
       {isOpen ? (

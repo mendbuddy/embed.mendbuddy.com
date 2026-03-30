@@ -157,6 +157,58 @@ export function Widget({
     }
   }, [configLoading, config, onReady]);
 
+  // ─── Scroll hide/bounce for chat button ─────────────────────────
+  const [scrollState, setScrollState] = useState<'idle' | 'hidden' | 'bouncing'>('idle');
+
+  useEffect(() => {
+    if (isIframe) return; // no button in iframe mode
+
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+    let bounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let wasHidden = false;
+
+    const onScroll = () => {
+      // Don't hide button while chat is open
+      if (isOpen) return;
+
+      // Clear any pending bounce-end timer
+      if (bounceTimer) {
+        clearTimeout(bounceTimer);
+        bounceTimer = null;
+      }
+
+      // Hide the button
+      if (!wasHidden) {
+        setScrollState('hidden');
+        wasHidden = true;
+      }
+
+      // Debounce: when scrolling stops, bounce it back
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        setScrollState('bouncing');
+        wasHidden = false;
+        // After bounce animation completes, go back to idle
+        bounceTimer = setTimeout(() => {
+          setScrollState('idle');
+        }, 500); // matches animation duration
+      }, 150);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (scrollTimer) clearTimeout(scrollTimer);
+      if (bounceTimer) clearTimeout(bounceTimer);
+    };
+  }, [isIframe, isOpen]);
+
+  // Reset scroll state when chat opens
+  useEffect(() => {
+    if (isOpen) setScrollState('idle');
+  }, [isOpen]);
+
   // Handle external open/close events
   useEffect(() => {
     const handleOpen = () => {
@@ -410,6 +462,7 @@ export function Widget({
           unreadCount={config.badge_enabled === false ? 0 : unreadCount}
           badgeColor={config.badge_color || '#ef4444'}
           badgeAnimation={config.badge_animation || 'bounce'}
+          scrollState={scrollState}
         />
       )}
       <ChatWindow
