@@ -206,39 +206,29 @@ export class VoiceCall {
       this.ringTimer = null;
     }
 
-    // Lock state to 'speaking' until first turn_complete — prevents transcript
-    // messages from flickering to 'listening' during the greeting
+    // Lock state until first turn_complete — ALL state changes go through
+    // this flag so nothing can flicker to 'listening' during the greeting.
     this.greetingInProgress = true;
 
-    // Brief connecting → connected transition before speaking
-    this.callbacks.onStateChange('connecting');
-    setTimeout(() => {
-      if (this.ended) return;
-      this.callbacks.onStateChange('ready');
+    // Set speaking immediately and play buffered audio
+    this.isSpeaking = true;
+    this.callbacks.onStateChange('speaking');
 
-      setTimeout(() => {
-        if (this.ended) return;
+    if (this.audioBuffer.length > 0) {
+      for (const b64 of this.audioBuffer) {
+        this.playAudio(b64);
+      }
+      this.audioBuffer = [];
+    }
 
-        // Play any buffered audio from the greeting
-        if (this.audioBuffer.length > 0) {
-          this.isSpeaking = true;
-          this.callbacks.onStateChange('speaking');
-          for (const b64 of this.audioBuffer) {
-            this.playAudio(b64);
-          }
-          this.audioBuffer = [];
-        }
-
-        // Wire up mic capture
-        if (this.readyReceived) {
-          this.startMicCapture().catch((err: any) => {
-            console.error('[VoiceCall] Mic capture failed:', err);
-            this.callbacks.onError('Microphone access failed');
-            this.disconnect('error');
-          });
-        }
-      }, 500);
-    }, 300);
+    // Wire up mic capture (muted by isSpeaking echo suppression)
+    if (this.readyReceived) {
+      this.startMicCapture().catch((err: any) => {
+        console.error('[VoiceCall] Mic capture failed:', err);
+        this.callbacks.onError('Microphone access failed');
+        this.disconnect('error');
+      });
+    }
   }
 
   // ─── Handle messages from DO proxy ──────────────────────────────────
@@ -265,7 +255,9 @@ export class VoiceCall {
 
     switch (msg.type) {
       case 'ready':
-        this.callbacks.onStateChange('ready');
+        if (!this.greetingInProgress) {
+          this.callbacks.onStateChange('ready');
+        }
         this.startMicCapture().catch((err) => {
           console.error('[VoiceCall] Mic capture failed:', err);
           this.callbacks.onError('Microphone access failed');
@@ -275,7 +267,9 @@ export class VoiceCall {
 
       case 'audio':
         this.isSpeaking = true;
-        this.callbacks.onStateChange('speaking');
+        if (!this.greetingInProgress) {
+          this.callbacks.onStateChange('speaking');
+        }
         this.playAudio(msg.data);
         break;
 
@@ -285,10 +279,6 @@ export class VoiceCall {
           msg.text,
           msg.partial !== false
         );
-        // Only switch to listening if AI isn't speaking and not during greeting
-        if (msg.speaker === 'user' && !this.isSpeaking && !this.greetingInProgress) {
-          this.callbacks.onStateChange('listening');
-        }
         break;
 
       case 'interrupted':
