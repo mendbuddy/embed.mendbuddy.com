@@ -24,6 +24,10 @@ interface VoiceCallCallbacks {
   onEnd: (reason: string) => void;
 }
 
+type InternalState =
+  | 'loading' | 'ringing' | 'connecting' | 'ready'
+  | 'speaking' | 'listening' | 'ended' | 'error';
+
 export class VoiceCall {
   private config: VoiceCallConfig | null = null;
   private callbacks: VoiceCallCallbacks;
@@ -42,16 +46,18 @@ export class VoiceCall {
   private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
   private wakeLock: any = null;
   private ended = false;
-  private isSpeaking = false; // Suppress mic while AI audio is playing (prevents echo on mobile)
+  private isSpeaking = false;
 
-  // Ringing state
-  private isRinging = false;
+  // State machine
+  private state: InternalState = 'loading';
+  private audioQueue: string[] = [];         // Buffered audio during ringing/transitions
+  private micReady = false;                  // Server sent 'ready', mic can be wired
+  private micWired = false;                  // AudioWorklet is connected
+
+  // Ringing
   private ringStartTime = 0;
   private stopRingtone: (() => void) | null = null;
-  private audioBuffer: string[] = []; // Buffer server audio during ring
-  private readyReceived = false;
   private ringTimer: ReturnType<typeof setTimeout> | null = null;
-  private greetingInProgress = false; // Suppress state flicker during first greeting
 
   constructor(
     apiUrl: string,
@@ -67,9 +73,16 @@ export class VoiceCall {
     this.existingThreadId = existingThreadId || null;
   }
 
-  // ─── Init + Connect via WebSocket ────────────────────────────────────
+  // ─── Single point of state control ──────────────────────────────────
+  private setState(next: InternalState): void {
+    if (this.state === next) return;
+    this.state = next;
+    this.callbacks.onStateChange(next);
+  }
+
+  // ─── Init ───────────────────────────────────────────────────────────
   async init(): Promise<{ allowed: boolean; reason?: string }> {
-    this.callbacks.onStateChange('loading');
+    this.setState('loading');
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -86,7 +99,6 @@ export class VoiceCall {
         return { allowed: false, reason: preData.reason || 'unavailable' };
       }
 
-      // Store session token if server created one
       if (preData.sessionToken && !this.sessionToken) {
         this.sessionToken = preData.sessionToken;
         try {
@@ -102,65 +114,57 @@ export class VoiceCall {
         ringDuration: preData.ringDuration ?? 3,
         ringCountry: preData.ringCountry || '',
       };
-    } catch (err) {
+    } catch {
       return { allowed: false, reason: 'network_error' };
     }
 
     return { allowed: true, threadId: this.config.threadId } as any;
   }
 
+  // ─── Connect ────────────────────────────────────────────────────────
   async connect(): Promise<void> {
     if (!this.config) throw new Error('Call init() first');
 
     this.ended = false;
+    this.audioQueue = [];
+    this.micReady = false;
+    this.micWired = false;
 
     this.requestWakeLock();
     this.setupVisibilityHandler();
 
-    // Request mic permission NOW while we're still in the user gesture.
-    // Browsers block getUserMedia from setTimeout/async callbacks.
+    // Request mic permission NOW during user gesture
     this.mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
 
-    // Create playback context (must also be created in user gesture)
+    // Create playback context during user gesture
     this.playbackContext = new AudioContext();
     this.scheduledTime = this.playbackContext.currentTime;
 
-    // Start ringing if enabled
+    // Start ringing or go straight to connecting
     if (this.config.ringEnabled) {
-      this.isRinging = true;
-      this.greetingInProgress = true; // Block ALL state changes from server messages
+      this.setState('ringing');
       this.ringStartTime = Date.now();
-      this.audioBuffer = [];
-      this.readyReceived = false;
-      this.callbacks.onStateChange('ringing');
-
-      // Use the playback context for ringtone (avoid creating a second AudioContext)
       this.stopRingtone = startRingtone(this.playbackContext, this.config.ringCountry);
 
-      // Safety timer: if ring duration elapses with no audio, stop ringing anyway
       this.ringTimer = setTimeout(() => {
-        if (this.isRinging) {
-          this.finishRinging();
+        if (this.state === 'ringing') {
+          this.transitionFromRinging();
         }
       }, this.config.ringDuration * 1000);
     } else {
-      this.callbacks.onStateChange('connecting');
+      this.setState('connecting');
     }
 
-    // Connect WebSocket to our DO proxy
+    // Open WebSocket
     const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
     const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
     let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
     const wsParams = new URLSearchParams();
-    if (this.sessionToken) {
-      wsParams.set('session', this.sessionToken);
-    }
+    if (this.sessionToken) wsParams.set('session', this.sessionToken);
     const threadId = this.config.threadId || this.existingThreadId;
-    if (threadId) {
-      wsParams.set('threadId', threadId);
-    }
+    if (threadId) wsParams.set('threadId', threadId);
     const paramStr = wsParams.toString();
     if (paramStr) wsUrl += `?${paramStr}`;
 
@@ -168,10 +172,7 @@ export class VoiceCall {
 
     this.ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
-      try {
-        const msg = JSON.parse(event.data);
-        this.handleServerMessage(msg);
-      } catch {}
+      try { this.handleServerMessage(JSON.parse(event.data)); } catch {}
     };
 
     this.ws.onerror = () => {
@@ -180,12 +181,9 @@ export class VoiceCall {
     };
 
     this.ws.onclose = () => {
-      if (!this.ended) {
-        this.disconnect('connection_lost');
-      }
+      if (!this.ended) this.disconnect('connection_lost');
     };
 
-    // Wait for WebSocket to open
     await new Promise<void>((resolve, reject) => {
       if (!this.ws) return reject(new Error('No WebSocket'));
       this.ws.onopen = () => resolve();
@@ -193,108 +191,77 @@ export class VoiceCall {
     });
   }
 
-  // ─── Ringing → Connected transition ─────────────────────────────────
-  private finishRinging(): void {
-    if (!this.isRinging) return;
-    this.isRinging = false;
-
-    // Stop ringtone (plays on playbackContext, don't close it)
+  // ─── Ringing → Connecting → Connected → Speaking ────────────────────
+  private transitionFromRinging(): void {
+    // Stop ringtone
     this.stopRingtone?.();
     this.stopRingtone = null;
+    if (this.ringTimer) { clearTimeout(this.ringTimer); this.ringTimer = null; }
 
-    if (this.ringTimer) {
-      clearTimeout(this.ringTimer);
-      this.ringTimer = null;
-    }
-
-    // Lock state until first turn_complete — ALL state changes from server
-    // messages are blocked so nothing can flicker during the greeting.
-    this.greetingInProgress = true;
-
-    // Snapshot buffered data before timeouts
-    const buffered = [...this.audioBuffer];
-    this.audioBuffer = [];
-    const micReady = this.readyReceived;
-
-    // Ringing → Connecting (300ms) → Connected (500ms) → Speaking
-    this.callbacks.onStateChange('connecting');
+    this.setState('connecting');
 
     setTimeout(() => {
       if (this.ended) return;
-      this.callbacks.onStateChange('ready'); // "Connected"
+      this.setState('ready'); // "Connected"
 
       setTimeout(() => {
         if (this.ended) return;
-
-        this.isSpeaking = true;
-        this.callbacks.onStateChange('speaking');
-
-        // Play buffered greeting audio
-        for (const b64 of buffered) {
-          this.playAudio(b64);
-        }
-        // Also play any audio that arrived during the transition delays
-        for (const b64 of this.audioBuffer) {
-          this.playAudio(b64);
-        }
-        this.audioBuffer = [];
-
-        // Wire up mic capture (muted by isSpeaking echo suppression)
-        if (micReady) {
-          this.startMicCapture().catch((err: any) => {
-            console.error('[VoiceCall] Mic capture failed:', err);
-            this.callbacks.onError('Microphone access failed');
-            this.disconnect('error');
-          });
-        }
-      }, 500); // Connected → Speaking delay
-    }, 300); // Connecting → Connected delay
+        this.playBufferedAudio();
+      }, 500);
+    }, 300);
   }
 
-  // ─── Handle messages from DO proxy ──────────────────────────────────
+  // ─── Play queued audio and wire mic ─────────────────────────────────
+  private playBufferedAudio(): void {
+    this.isSpeaking = true;
+    this.setState('speaking');
+
+    // Play everything queued
+    for (const b64 of this.audioQueue) {
+      this.playAudio(b64);
+    }
+    this.audioQueue = [];
+
+    // Wire mic if ready
+    if (this.micReady && !this.micWired) {
+      this.wireMic();
+    }
+  }
+
+  // ─── Handle server messages ─────────────────────────────────────────
   private handleServerMessage(msg: any): void {
     if (this.ended) return;
 
-    // During ringing: buffer audio and defer ready
-    if (this.isRinging) {
-      if (msg.type === 'ready') {
-        this.readyReceived = true;
-        return;
-      }
-      if (msg.type === 'audio') {
-        this.audioBuffer.push(msg.data);
-        // If ring duration has elapsed and we now have audio, finish ringing
-        const elapsed = Date.now() - this.ringStartTime;
-        if (this.config && elapsed >= this.config.ringDuration * 1000) {
-          this.finishRinging();
-        }
-        return;
-      }
-      // Let transcript, error, ended pass through even during ringing
-    }
-
     switch (msg.type) {
       case 'ready':
-        if (this.greetingInProgress) {
-          this.readyReceived = true;
-          break; // Mic wiring handled by finishRinging
+        this.micReady = true;
+        // Only wire mic + change state if past the greeting phase
+        if (this.state === 'listening' || this.state === 'speaking') {
+          if (!this.micWired) this.wireMic();
+        } else if (this.state === 'connecting') {
+          // Non-ringing path: connecting → ready → listening
+          this.setState('ready');
+          this.wireMic();
         }
-        this.callbacks.onStateChange('ready');
-        this.startMicCapture().catch((err) => {
-          console.error('[VoiceCall] Mic capture failed:', err);
-          this.callbacks.onError('Microphone access failed');
-          this.disconnect('error');
-        });
         break;
 
       case 'audio':
-        this.isSpeaking = true;
-        if (this.greetingInProgress) {
-          // Buffer audio during connecting→connected→speaking transition
-          this.audioBuffer.push(msg.data);
+        // During ringing or transition: buffer
+        if (this.state === 'ringing' || this.state === 'connecting' || this.state === 'ready') {
+          this.audioQueue.push(msg.data);
+
+          // If ringing and ring time elapsed, start transition
+          if (this.state === 'ringing' && this.config) {
+            const elapsed = Date.now() - this.ringStartTime;
+            if (elapsed >= this.config.ringDuration * 1000) {
+              this.transitionFromRinging();
+            }
+          }
           break;
         }
-        this.callbacks.onStateChange('speaking');
+        // Normal play
+        this.isSpeaking = true;
+        this.setState('speaking');
         this.playAudio(msg.data);
         break;
 
@@ -304,29 +271,25 @@ export class VoiceCall {
           msg.text,
           msg.partial !== false
         );
+        // No state change from transcripts — only audio and turn_complete drive state
         break;
 
       case 'interrupted':
         this.isSpeaking = false;
-        this.greetingInProgress = false;
         this.stopPlayback();
-        this.callbacks.onStateChange('listening');
+        this.setState('listening');
         break;
 
       case 'turn_complete':
-        this.greetingInProgress = false;
-        // Don't switch to 'listening' until queued audio has finished playing.
         if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
           const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
           setTimeout(() => {
             this.isSpeaking = false;
-            if (!this.ended) {
-              this.callbacks.onStateChange('listening');
-            }
+            if (!this.ended) this.setState('listening');
           }, remaining);
         } else {
           this.isSpeaking = false;
-          this.callbacks.onStateChange('listening');
+          this.setState('listening');
         }
         break;
 
@@ -341,11 +304,19 @@ export class VoiceCall {
     }
   }
 
-  // ─── Mic capture with AudioWorklet ───────────────────────────────────
-  // mediaStream is obtained in connect() during the user gesture.
-  // This method wires it to the AudioWorklet for capture.
+  // ─── Wire mic capture ───────────────────────────────────────────────
+  private wireMic(): void {
+    if (this.micWired) return;
+    this.micWired = true;
+
+    this.startMicCapture().catch((err) => {
+      console.error('[VoiceCall] Mic capture failed:', err);
+      this.callbacks.onError('Microphone access failed');
+      this.disconnect('error');
+    });
+  }
+
   private async startMicCapture(): Promise<void> {
-    // Get mic if not already obtained (non-ringing path on older browsers)
     if (!this.mediaStream) {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -391,8 +362,7 @@ export class VoiceCall {
       if (e.data.type === 'volume') {
         this.callbacks.onMicVolume(Math.min(1, e.data.level * 5));
       } else if (e.data.type === 'audio' && this.ws && this.ws.readyState === WebSocket.OPEN && !this.ended) {
-        // Suppress mic while AI is speaking (echo prevention)
-        if (this.isSpeaking) return;
+        if (this.isSpeaking) return; // Echo suppression
         const bytes = new Uint8Array(e.data.pcm.buffer);
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
@@ -404,13 +374,10 @@ export class VoiceCall {
     source.connect(this.workletNode);
     this.workletNode.connect(this.captureContext.destination);
 
-    // Only set 'listening' if not speaking and not in greeting phase
-    if (!this.isSpeaking && !this.greetingInProgress) {
-      this.callbacks.onStateChange('listening');
-    }
+    // Don't change state here — caller decides
   }
 
-  // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
+  // ─── Audio playback ─────────────────────────────────────────────────
   private stopPlayback(): void {
     if (this.playbackContext) {
       this.scheduledTime = this.playbackContext.currentTime;
@@ -429,7 +396,6 @@ export class VoiceCall {
     const float32 = new Float32Array(pcm16.length);
     for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768;
 
-    // Resample 24kHz → browser sample rate
     const inputRate = 24000;
     const outputRate = this.playbackContext.sampleRate;
     const ratio = outputRate / inputRate;
@@ -445,7 +411,6 @@ export class VoiceCall {
       resampled[i] = a + frac * (b - a);
     }
 
-    // Volume for UI
     let sum = 0;
     for (let i = 0; i < resampled.length; i++) sum += resampled[i] * resampled[i];
     this.callbacks.onPlaybackVolume(Math.min(1, Math.sqrt(sum / resampled.length) * 5));
@@ -462,7 +427,7 @@ export class VoiceCall {
     this.scheduledTime = startAt + buffer.duration;
   }
 
-  // ─── Mute/unmute ─────────────────────────────────────────────────────
+  // ─── Mute/unmute ────────────────────────────────────────────────────
   mute(): void {
     this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = false));
   }
@@ -471,63 +436,40 @@ export class VoiceCall {
     this.mediaStream?.getAudioTracks().forEach((t) => (t.enabled = true));
   }
 
-  // ─── Disconnect ──────────────────────────────────────────────────────
+  // ─── Disconnect ─────────────────────────────────────────────────────
   async disconnect(reason = 'user_ended'): Promise<void> {
     if (this.ended) return;
     this.ended = true;
 
-    // Stop ringing if still active
-    if (this.isRinging) {
-      this.isRinging = false;
-      this.stopRingtone?.();
-      this.stopRingtone = null;
-      if (this.ringTimer) {
-        clearTimeout(this.ringTimer);
-        this.ringTimer = null;
-      }
-    }
+    this.stopRingtone?.();
+    this.stopRingtone = null;
+    if (this.ringTimer) { clearTimeout(this.ringTimer); this.ringTimer = null; }
 
-    // Stop mic
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach((t) => t.stop());
       this.mediaStream = null;
     }
-    if (this.workletNode) {
-      this.workletNode.disconnect();
-      this.workletNode = null;
-    }
-    if (this.captureContext) {
-      try { this.captureContext.close(); } catch {}
-      this.captureContext = null;
-    }
-    if (this.playbackContext) {
-      try { this.playbackContext.close(); } catch {}
-      this.playbackContext = null;
-    }
+    if (this.workletNode) { this.workletNode.disconnect(); this.workletNode = null; }
+    if (this.captureContext) { try { this.captureContext.close(); } catch {} this.captureContext = null; }
+    if (this.playbackContext) { try { this.playbackContext.close(); } catch {} this.playbackContext = null; }
 
-    // Close WebSocket (DO handles cleanup, usage logging, call end)
     try { this.ws?.close(1000, reason); } catch {}
     this.ws = null;
 
     this.releaseWakeLock();
     this.removeVisibilityHandler();
 
-    this.callbacks.onStateChange(reason === 'error' ? 'error' : 'ended');
+    this.setState(reason === 'error' ? 'error' : 'ended');
     this.callbacks.onEnd(reason);
   }
 
-  // ─── Mobile Mitigations ──────────────────────────────────────────────
-
+  // ─── Mobile Mitigations ─────────────────────────────────────────────
   private visibilityHandler = () => {
     if (document.hidden) {
-      this.visibilityTimer = setTimeout(() => {
-        this.disconnect('background_timeout');
-      }, 15000);
-    } else {
-      if (this.visibilityTimer) {
-        clearTimeout(this.visibilityTimer);
-        this.visibilityTimer = null;
-      }
+      this.visibilityTimer = setTimeout(() => this.disconnect('background_timeout'), 15000);
+    } else if (this.visibilityTimer) {
+      clearTimeout(this.visibilityTimer);
+      this.visibilityTimer = null;
     }
   };
 
@@ -537,10 +479,7 @@ export class VoiceCall {
 
   private removeVisibilityHandler(): void {
     document.removeEventListener('visibilitychange', this.visibilityHandler);
-    if (this.visibilityTimer) {
-      clearTimeout(this.visibilityTimer);
-      this.visibilityTimer = null;
-    }
+    if (this.visibilityTimer) { clearTimeout(this.visibilityTimer); this.visibilityTimer = null; }
   }
 
   private async requestWakeLock(): Promise<void> {
