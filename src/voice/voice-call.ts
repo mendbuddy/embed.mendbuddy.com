@@ -56,8 +56,10 @@ export class VoiceCall {
 
   // Ringing
   private ringStartTime = 0;
+  private ringContext: AudioContext | null = null; // Separate context for ringtone
   private stopRingtone: (() => void) | null = null;
   private ringTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingTurnComplete = false;            // turn_complete arrived during ringing
 
   constructor(
     apiUrl: string,
@@ -146,7 +148,8 @@ export class VoiceCall {
     if (this.config.ringEnabled) {
       this.setState('ringing');
       this.ringStartTime = Date.now();
-      this.stopRingtone = startRingtone(this.playbackContext, this.config.ringCountry);
+      this.ringContext = new AudioContext();
+      this.stopRingtone = startRingtone(this.ringContext, this.config.ringCountry);
 
       this.ringTimer = setTimeout(() => {
         if (this.state === 'ringing') {
@@ -193,9 +196,11 @@ export class VoiceCall {
 
   // ─── Ringing → Connecting → Connected → Speaking ────────────────────
   private transitionFromRinging(): void {
-    // Stop ringtone
+    // Stop ringtone and close its AudioContext
     this.stopRingtone?.();
     this.stopRingtone = null;
+    try { this.ringContext?.close(); } catch {}
+    this.ringContext = null;
     if (this.ringTimer) { clearTimeout(this.ringTimer); this.ringTimer = null; }
 
     this.setState('connecting');
@@ -225,6 +230,21 @@ export class VoiceCall {
     // Wire mic if ready
     if (this.micReady && !this.micWired) {
       this.wireMic();
+    }
+
+    // If turn_complete arrived during ringing, transition to listening after audio plays
+    if (this.pendingTurnComplete) {
+      this.pendingTurnComplete = false;
+      if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
+        const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
+        setTimeout(() => {
+          this.isSpeaking = false;
+          if (!this.ended) this.setState('listening');
+        }, remaining);
+      } else {
+        this.isSpeaking = false;
+        this.setState('listening');
+      }
     }
   }
 
@@ -283,8 +303,11 @@ export class VoiceCall {
         break;
 
       case 'turn_complete':
-        // Ignore during ringing/transition — greeting audio is buffered, not played yet
-        if (this.state === 'ringing' || this.state === 'connecting' || this.state === 'ready') break;
+        // During ringing/transition: store it, replay after greeting audio plays
+        if (this.state === 'ringing' || this.state === 'connecting' || this.state === 'ready') {
+          this.pendingTurnComplete = true;
+          break;
+        }
         if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
           const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
           setTimeout(() => {
@@ -447,6 +470,8 @@ export class VoiceCall {
 
     this.stopRingtone?.();
     this.stopRingtone = null;
+    try { this.ringContext?.close(); } catch {}
+    this.ringContext = null;
     if (this.ringTimer) { clearTimeout(this.ringTimer); this.ringTimer = null; }
 
     if (this.mediaStream) {
