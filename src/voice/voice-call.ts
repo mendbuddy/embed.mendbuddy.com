@@ -194,8 +194,21 @@ export class VoiceCall {
         break;
 
       case 'turn_complete':
-        this.isSpeaking = false;
-        this.callbacks.onStateChange('listening');
+        // Don't switch to 'listening' until queued audio has finished playing.
+        // Gemini sends turnComplete when it's done generating, but audio chunks
+        // are still buffered and haven't played through the speaker yet.
+        if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
+          const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
+          setTimeout(() => {
+            this.isSpeaking = false;
+            if (!this.ended) {
+              this.callbacks.onStateChange('listening');
+            }
+          }, remaining);
+        } else {
+          this.isSpeaking = false;
+          this.callbacks.onStateChange('listening');
+        }
         break;
 
       case 'error':
