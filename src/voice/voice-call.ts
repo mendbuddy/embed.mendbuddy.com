@@ -51,6 +51,7 @@ export class VoiceCall {
   private audioBuffer: string[] = []; // Buffer server audio during ring
   private readyReceived = false;
   private ringTimer: ReturnType<typeof setTimeout> | null = null;
+  private greetingInProgress = false; // Suppress state flicker during first greeting
 
   constructor(
     apiUrl: string,
@@ -205,8 +206,9 @@ export class VoiceCall {
       this.ringTimer = null;
     }
 
-    // Transition to 'ready' ("Connected") — 'speaking' will follow when audio plays
-    this.callbacks.onStateChange('ready');
+    // Lock state to 'speaking' until first turn_complete — prevents transcript
+    // messages from flickering to 'listening' during the greeting
+    this.greetingInProgress = true;
 
     // Play any buffered audio from the greeting
     if (this.audioBuffer.length > 0) {
@@ -216,6 +218,8 @@ export class VoiceCall {
         this.playAudio(b64);
       }
       this.audioBuffer = [];
+    } else {
+      this.callbacks.onStateChange('ready');
     }
 
     // Wire up mic capture (mediaStream already obtained in connect())
@@ -272,19 +276,21 @@ export class VoiceCall {
           msg.text,
           msg.partial !== false
         );
-        // Only switch to listening if AI isn't currently speaking
-        if (msg.speaker === 'user' && !this.isSpeaking) {
+        // Only switch to listening if AI isn't speaking and not during greeting
+        if (msg.speaker === 'user' && !this.isSpeaking && !this.greetingInProgress) {
           this.callbacks.onStateChange('listening');
         }
         break;
 
       case 'interrupted':
         this.isSpeaking = false;
+        this.greetingInProgress = false;
         this.stopPlayback();
         this.callbacks.onStateChange('listening');
         break;
 
       case 'turn_complete':
+        this.greetingInProgress = false;
         // Don't switch to 'listening' until queued audio has finished playing.
         if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
           const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
@@ -374,8 +380,8 @@ export class VoiceCall {
     source.connect(this.workletNode);
     this.workletNode.connect(this.captureContext.destination);
 
-    // Only set 'listening' if not already speaking (e.g. greeting playing after ringing)
-    if (!this.isSpeaking) {
+    // Only set 'listening' if not speaking and not in greeting phase
+    if (!this.isSpeaking && !this.greetingInProgress) {
       this.callbacks.onStateChange('listening');
     }
   }
