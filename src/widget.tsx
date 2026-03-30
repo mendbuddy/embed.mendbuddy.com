@@ -352,12 +352,17 @@ export function Widget({
         return;
       }
 
+      // Sync voice thread to chat so text + voice share one conversation
+      if (initResult.threadId) {
+        chat.setThreadId(initResult.threadId);
+      }
+
       await call.connect();
     } catch (err) {
       console.error('[MendBuddy Voice] Error:', err);
       setVoiceState('error');
     }
-  }, [apiUrl, embedId, chat.threadId, chat.addVoiceMessage]);
+  }, [apiUrl, embedId, chat.threadId, chat.addVoiceMessage, chat.setThreadId]);
 
   const handleVoiceMuteToggle = useCallback(() => {
     if (!voiceCallRef.current) return;

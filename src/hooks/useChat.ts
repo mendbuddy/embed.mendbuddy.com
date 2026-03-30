@@ -420,5 +420,6 @@ export function useChat(
     resetSession,
     reloadHistory,
     addVoiceMessage,
+    setThreadId,
   };
 }

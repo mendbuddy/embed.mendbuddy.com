@@ -101,7 +101,7 @@ export class VoiceCall {
       return { allowed: false, reason: 'network_error' };
     }
 
-    return { allowed: true };
+    return { allowed: true, threadId: this.config.threadId };
   }
 
   async connect(): Promise<void> {
