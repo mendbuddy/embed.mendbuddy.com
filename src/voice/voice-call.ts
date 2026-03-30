@@ -170,7 +170,6 @@ export class VoiceCall {
         break;
 
       case 'audio':
-        this.isSpeaking = true;
         this.callbacks.onStateChange('speaking');
         this.playAudio(msg.data);
         break;
@@ -181,14 +180,12 @@ export class VoiceCall {
           msg.text,
           msg.partial !== false
         );
-        // Only switch to 'listening' if the AI isn't currently speaking
-        if (msg.speaker === 'user' && !this.isSpeaking) {
+        if (msg.speaker === 'user') {
           this.callbacks.onStateChange('listening');
         }
         break;
 
       case 'turn_complete':
-        this.isSpeaking = false;
         this.callbacks.onStateChange('listening');
         break;
 

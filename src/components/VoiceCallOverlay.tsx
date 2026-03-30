@@ -60,7 +60,8 @@ function StatusRing({ state, micVolume, playbackVolume, primaryColor }: {
   playbackVolume: number;
   primaryColor: string;
 }) {
-  const volume = state === 'listening' ? micVolume : state === 'speaking' ? playbackVolume : 0;
+  // Ring expands with mic volume when listening, stays static when AI is speaking
+  const volume = state === 'listening' ? micVolume : 0;
   const scale = 1 + volume * 0.3;
   const opacity = state === 'connecting' ? 0.5 : 1;
 

@@ -143,4 +143,5 @@ export interface UseChatReturn extends ChatState {
   submitPreChat: (fields: Record<string, string>) => Promise<void>;
   clearError: () => void;
   resetSession: () => void;
+  reloadHistory: () => Promise<void>;
 }

@@ -320,7 +320,9 @@ export function Widget({
           console.error('[MendBuddy Voice]', message);
           setVoiceState('error');
         },
-        onEnd: () => {},
+        onEnd: () => {
+          chat.reloadHistory();
+        },
       }, existingThreadId);
 
       voiceCallRef.current = call;
