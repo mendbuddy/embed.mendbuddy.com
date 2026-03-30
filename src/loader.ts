@@ -375,6 +375,73 @@ function setupCustomEvents(): void {
   window.addEventListener('mendbuddy:close', () => closeWidget());
 }
 
+// ─── Scroll Hide / Bounce ───────────────────────────────────────
+
+function setupScrollHide(): void {
+  if (!state.container || !state.config) return;
+
+  const pos = state.config.widget_position || 'bottom-right';
+  const isTop = pos.includes('top');
+  const hideY = isTop ? '-100px' : '100px';
+
+  // Inject scroll animation styles once
+  if (!document.getElementById('mendbuddy-scroll-styles')) {
+    const s = document.createElement('style');
+    s.id = 'mendbuddy-scroll-styles';
+    s.textContent = `
+      @keyframes mb-scroll-bounce {
+        0% { transform: translateY(${hideY}); opacity: 0; }
+        60% { transform: translateY(calc(${hideY} * -0.1)); opacity: 1; }
+        80% { transform: translateY(calc(${hideY} * 0.04)); }
+        100% { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+  let bounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let isHidden = false;
+
+  const onScroll = () => {
+    // Don't hide while chat is open
+    if (state.isOpen) return;
+    const c = state.container;
+    if (!c) return;
+
+    // Clear any pending bounce-end timer
+    if (bounceTimer) { clearTimeout(bounceTimer); bounceTimer = null; }
+
+    // Hide the button
+    if (!isHidden) {
+      c.style.transition = 'transform 0.3s ease-in, opacity 0.2s ease-in';
+      c.style.transform = `translateY(${hideY})`;
+      c.style.opacity = '0';
+      c.style.pointerEvents = 'none';
+      isHidden = true;
+    }
+
+    // Debounce: when scrolling stops, bounce it back
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      if (!c) return;
+      c.style.transition = 'none';
+      c.style.animation = 'mb-scroll-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both';
+      c.style.pointerEvents = '';
+      isHidden = false;
+
+      // After bounce completes, clean up animation property
+      bounceTimer = setTimeout(() => {
+        c.style.animation = '';
+        c.style.transform = '';
+        c.style.opacity = '';
+      }, 500);
+    }, 150);
+  };
+
+  document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+}
+
 // ─── Public API ──────────────────────────────────────────────────────
 
 async function init(config: LoaderConfig): Promise<void> {
@@ -398,6 +465,9 @@ async function init(config: LoaderConfig): Promise<void> {
 
   // Create iframe (hidden, preloaded for fast open)
   createIframe();
+
+  // Scroll hide/bounce for chat button
+  setupScrollHide();
 
   // Setup communication
   setupPostMessageListener();
