@@ -220,7 +220,7 @@ export class VoiceCall {
 
     // Wire up mic capture (mediaStream already obtained in connect())
     if (this.readyReceived) {
-      this.wireMicCapture().catch((err) => {
+      this.startMicCapture().catch((err: any) => {
         console.error('[VoiceCall] Mic capture failed:', err);
         this.callbacks.onError('Microphone access failed');
         this.disconnect('error');
@@ -374,11 +374,11 @@ export class VoiceCall {
     source.connect(this.workletNode);
     this.workletNode.connect(this.captureContext.destination);
 
-    this.callbacks.onStateChange('listening');
+    // Only set 'listening' if not already speaking (e.g. greeting playing after ringing)
+    if (!this.isSpeaking) {
+      this.callbacks.onStateChange('listening');
+    }
   }
-
-  // Alias used by finishRinging — same as startMicCapture since stream is pre-obtained
-  private wireMicCapture = this.startMicCapture;
 
   // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
   private stopPlayback(): void {
