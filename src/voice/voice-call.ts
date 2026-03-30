@@ -210,26 +210,35 @@ export class VoiceCall {
     // messages from flickering to 'listening' during the greeting
     this.greetingInProgress = true;
 
-    // Play any buffered audio from the greeting
-    if (this.audioBuffer.length > 0) {
-      this.isSpeaking = true;
-      this.callbacks.onStateChange('speaking');
-      for (const b64 of this.audioBuffer) {
-        this.playAudio(b64);
-      }
-      this.audioBuffer = [];
-    } else {
+    // Brief connecting → connected transition before speaking
+    this.callbacks.onStateChange('connecting');
+    setTimeout(() => {
+      if (this.ended) return;
       this.callbacks.onStateChange('ready');
-    }
 
-    // Wire up mic capture (mediaStream already obtained in connect())
-    if (this.readyReceived) {
-      this.startMicCapture().catch((err: any) => {
-        console.error('[VoiceCall] Mic capture failed:', err);
-        this.callbacks.onError('Microphone access failed');
-        this.disconnect('error');
-      });
-    }
+      setTimeout(() => {
+        if (this.ended) return;
+
+        // Play any buffered audio from the greeting
+        if (this.audioBuffer.length > 0) {
+          this.isSpeaking = true;
+          this.callbacks.onStateChange('speaking');
+          for (const b64 of this.audioBuffer) {
+            this.playAudio(b64);
+          }
+          this.audioBuffer = [];
+        }
+
+        // Wire up mic capture
+        if (this.readyReceived) {
+          this.startMicCapture().catch((err: any) => {
+            console.error('[VoiceCall] Mic capture failed:', err);
+            this.callbacks.onError('Microphone access failed');
+            this.disconnect('error');
+          });
+        }
+      }, 500);
+    }, 300);
   }
 
   // ─── Handle messages from DO proxy ──────────────────────────────────
