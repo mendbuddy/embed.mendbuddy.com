@@ -64,12 +64,13 @@ function StatusRing({ state, micVolume, playbackVolume, primaryColor }: {
   // Ring expands with mic volume when listening, stays static when AI is speaking
   const volume = state === 'listening' ? micVolume : 0;
   const scale = 1 + volume * 0.3;
-  const opacity = state === 'connecting' ? 0.5 : 1;
+  const isConnectingOrRinging = state === 'connecting' || state === 'ringing';
+  const opacity = isConnectingOrRinging ? 0.5 : 1;
 
   return (
     <div class="mb-voice-ring-container">
       <div
-        class={`mb-voice-ring ${state === 'connecting' ? 'mb-voice-ring-pulse' : ''}`}
+        class={`mb-voice-ring ${isConnectingOrRinging ? 'mb-voice-ring-pulse' : ''}`}
         style={{
           borderColor: primaryColor,
           transform: `scale(${scale})`,
@@ -78,7 +79,7 @@ function StatusRing({ state, micVolume, playbackVolume, primaryColor }: {
         }}
       />
       <div class="mb-voice-ring-icon" style={{ color: primaryColor }}>
-        {state === 'connecting' ? (
+        {isConnectingOrRinging ? (
           <div class="mb-voice-dots">
             <span style={{ backgroundColor: primaryColor }} />
             <span style={{ backgroundColor: primaryColor }} />
@@ -208,6 +209,7 @@ export function VoiceCallOverlay({
   const statusText = {
     loading: 'Loading...',
     connecting: 'Connecting...',
+    ringing: 'Ringing...',
     ready: 'Connected',
     listening: 'Listening...',
     speaking: 'Speaking...',
@@ -225,17 +227,21 @@ export function VoiceCallOverlay({
       <div class="mb-voice-info">
         <div class="mb-voice-name">{assistantName}</div>
         <div class="mb-voice-status">{statusText}</div>
-        <div class="mb-voice-timer">{formatDuration(duration)}</div>
+        {state !== 'ringing' && state !== 'connecting' && state !== 'loading' && (
+          <div class="mb-voice-timer">{formatDuration(duration)}</div>
+        )}
       </div>
 
       <div class="mb-voice-controls">
-        <button
-          class={`mb-voice-mute ${isMuted ? 'mb-voice-muted' : ''}`}
-          onClick={onMuteToggle}
-          aria-label={isMuted ? 'Unmute' : 'Mute'}
-        >
-          <MicIcon muted={isMuted} />
-        </button>
+        {state !== 'ringing' && state !== 'connecting' && state !== 'loading' && (
+          <button
+            class={`mb-voice-mute ${isMuted ? 'mb-voice-muted' : ''}`}
+            onClick={onMuteToggle}
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+          >
+            <MicIcon muted={isMuted} />
+          </button>
+        )}
         <button class="mb-voice-hangup" onClick={onHangUp} aria-label="End call">
           <HangUpIcon />
         </button>

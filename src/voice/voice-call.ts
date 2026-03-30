@@ -4,10 +4,14 @@
 // No API key, no system instruction, no @google/genai SDK needed.
 // ============================================================================
 
+import { startRingtone } from './ringtone';
+
 interface VoiceCallConfig {
   threadId: string;
   buddyName: string;
   companyName: string;
+  ringEnabled: boolean;
+  ringDuration: number;
 }
 
 interface VoiceCallCallbacks {
@@ -40,6 +44,15 @@ export class VoiceCall {
   private ended = false;
   private isSpeaking = false; // Suppress mic while AI audio is playing (prevents echo on mobile)
 
+  // Ringing state
+  private isRinging = false;
+  private ringStartTime = 0;
+  private ringContext: AudioContext | null = null;
+  private stopRingtone: (() => void) | null = null;
+  private audioBuffer: string[] = []; // Buffer server audio during ring
+  private readyReceived = false;
+  private ringTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     apiUrl: string,
     embedId: string,
@@ -58,17 +71,6 @@ export class VoiceCall {
   async init(): Promise<{ allowed: boolean; reason?: string }> {
     this.callbacks.onStateChange('loading');
 
-    // Build WebSocket URL — the server does all the setup (session, prompt, Gemini connection)
-    const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
-    const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
-    let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
-
-    if (this.existingThreadId) {
-      wsUrl += `?threadId=${encodeURIComponent(this.existingThreadId)}`;
-    }
-
-    // Check if voice is available before upgrading (can't send JSON error over WS upgrade)
-    // Do a preflight check via the init endpoint
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (this.sessionToken) headers['X-Embed-Session'] = this.sessionToken;
@@ -96,6 +98,8 @@ export class VoiceCall {
         threadId: preData.threadId,
         buddyName: preData.buddyName,
         companyName: preData.companyName,
+        ringEnabled: preData.ringEnabled ?? true,
+        ringDuration: preData.ringDuration ?? 3,
       };
     } catch (err) {
       return { allowed: false, reason: 'network_error' };
@@ -107,22 +111,42 @@ export class VoiceCall {
   async connect(): Promise<void> {
     if (!this.config) throw new Error('Call init() first');
 
-    this.callbacks.onStateChange('connecting');
     this.startTime = Date.now();
     this.ended = false;
 
     this.requestWakeLock();
     this.setupVisibilityHandler();
 
-    // Create playback context
+    // Start ringing if enabled
+    if (this.config.ringEnabled) {
+      this.isRinging = true;
+      this.ringStartTime = Date.now();
+      this.audioBuffer = [];
+      this.readyReceived = false;
+      this.callbacks.onStateChange('ringing');
+
+      // Create ring audio context and start ringtone
+      this.ringContext = new AudioContext();
+      this.stopRingtone = startRingtone(this.ringContext);
+
+      // Safety timer: if ring duration elapses with no audio, stop ringing anyway
+      this.ringTimer = setTimeout(() => {
+        if (this.isRinging) {
+          this.finishRinging();
+        }
+      }, this.config.ringDuration * 1000);
+    } else {
+      this.callbacks.onStateChange('connecting');
+    }
+
+    // Create playback context (needed even during ringing for buffered audio)
     this.playbackContext = new AudioContext();
     this.scheduledTime = this.playbackContext.currentTime;
 
-    // Connect WebSocket to our DO proxy (NOT to Gemini directly)
+    // Connect WebSocket to our DO proxy
     const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
     const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
     let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
-    // Pass session token as query param (WebSocket can't send custom headers)
     const wsParams = new URLSearchParams();
     if (this.sessionToken) {
       wsParams.set('session', this.sessionToken);
@@ -163,9 +187,65 @@ export class VoiceCall {
     });
   }
 
+  // ─── Ringing → Connected transition ─────────────────────────────────
+  private finishRinging(): void {
+    if (!this.isRinging) return;
+    this.isRinging = false;
+
+    // Stop ringtone
+    this.stopRingtone?.();
+    this.stopRingtone = null;
+    try { this.ringContext?.close(); } catch {}
+    this.ringContext = null;
+
+    if (this.ringTimer) {
+      clearTimeout(this.ringTimer);
+      this.ringTimer = null;
+    }
+
+    // Play any buffered audio from the greeting
+    if (this.audioBuffer.length > 0) {
+      this.isSpeaking = true;
+      this.callbacks.onStateChange('speaking');
+      for (const b64 of this.audioBuffer) {
+        this.playAudio(b64);
+      }
+      this.audioBuffer = [];
+    } else {
+      this.callbacks.onStateChange('listening');
+    }
+
+    // Start mic capture if we received ready during ringing
+    if (this.readyReceived) {
+      this.startMicCapture().catch((err) => {
+        console.error('[VoiceCall] Mic capture failed:', err);
+        this.callbacks.onError('Microphone access failed');
+        this.disconnect('error');
+      });
+    }
+  }
+
   // ─── Handle messages from DO proxy ──────────────────────────────────
   private handleServerMessage(msg: any): void {
     if (this.ended) return;
+
+    // During ringing: buffer audio and defer ready
+    if (this.isRinging) {
+      if (msg.type === 'ready') {
+        this.readyReceived = true;
+        return;
+      }
+      if (msg.type === 'audio') {
+        this.audioBuffer.push(msg.data);
+        // If ring duration has elapsed and we now have audio, finish ringing
+        const elapsed = Date.now() - this.ringStartTime;
+        if (this.config && elapsed >= this.config.ringDuration * 1000) {
+          this.finishRinging();
+        }
+        return;
+      }
+      // Let transcript, error, ended pass through even during ringing
+    }
 
     switch (msg.type) {
       case 'ready':
@@ -203,8 +283,6 @@ export class VoiceCall {
 
       case 'turn_complete':
         // Don't switch to 'listening' until queued audio has finished playing.
-        // Gemini sends turnComplete when it's done generating, but audio chunks
-        // are still buffered and haven't played through the speaker yet.
         if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
           const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
           setTimeout(() => {
@@ -275,11 +353,12 @@ export class VoiceCall {
       if (e.data.type === 'volume') {
         this.callbacks.onMicVolume(Math.min(1, e.data.level * 5));
       } else if (e.data.type === 'audio' && this.ws && this.ws.readyState === WebSocket.OPEN && !this.ended) {
+        // Suppress mic while AI is speaking (echo prevention)
+        if (this.isSpeaking) return;
         const bytes = new Uint8Array(e.data.pcm.buffer);
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         const b64 = btoa(binary);
-        // Send audio to DO proxy (DO forwards to Gemini)
         this.ws.send(JSON.stringify({ type: 'audio', data: b64 }));
       }
     };
@@ -291,11 +370,8 @@ export class VoiceCall {
   }
 
   // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
-  // Stop all scheduled audio playback (used on interruption)
   private stopPlayback(): void {
     if (this.playbackContext) {
-      // Reset scheduled time to now — any already-scheduled sources will finish
-      // but nothing new will be queued ahead
       this.scheduledTime = this.playbackContext.currentTime;
       this.callbacks.onPlaybackVolume(0);
     }
@@ -358,6 +434,19 @@ export class VoiceCall {
   async disconnect(reason = 'user_ended'): Promise<void> {
     if (this.ended) return;
     this.ended = true;
+
+    // Stop ringing if still active
+    if (this.isRinging) {
+      this.isRinging = false;
+      this.stopRingtone?.();
+      this.stopRingtone = null;
+      try { this.ringContext?.close(); } catch {}
+      this.ringContext = null;
+      if (this.ringTimer) {
+        clearTimeout(this.ringTimer);
+        this.ringTimer = null;
+      }
+    }
 
     // Stop mic
     if (this.mediaStream) {

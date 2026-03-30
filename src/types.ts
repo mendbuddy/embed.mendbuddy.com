@@ -102,6 +102,7 @@ export type VoiceCallState =
   | 'confirming'
   | 'loading'
   | 'connecting'
+  | 'ringing'
   | 'ready'
   | 'listening'
   | 'speaking'
