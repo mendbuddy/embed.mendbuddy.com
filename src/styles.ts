@@ -46,26 +46,6 @@ export function getStyles(): string {
       transform: scale(0.98);
     }
 
-    /* Scroll hide: slide off-screen */
-    .mb-button-scroll-hidden {
-      transform: translateY(var(--mb-hide-y, 100px)) !important;
-      opacity: 0 !important;
-      transition: transform 0.3s ease-in, opacity 0.2s ease-in !important;
-      pointer-events: none;
-    }
-
-    /* Scroll bounce-back */
-    .mb-button-scroll-visible {
-      animation: mb-scroll-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    }
-
-    @keyframes mb-scroll-bounce {
-      0% { transform: translateY(var(--mb-hide-y, 100px)); opacity: 0; }
-      60% { transform: translateY(calc(var(--mb-hide-y, 100px) * -0.1)); opacity: 1; }
-      80% { transform: translateY(calc(var(--mb-hide-y, 100px) * 0.04)); }
-      100% { transform: translateY(0); opacity: 1; }
-    }
-
     .mb-button svg {
       width: 28px;
       height: 28px;
