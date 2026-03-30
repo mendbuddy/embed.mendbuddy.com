@@ -127,8 +127,9 @@ export class VoiceCall {
     if (this.sessionToken) {
       wsParams.set('session', this.sessionToken);
     }
-    if (this.existingThreadId) {
-      wsParams.set('threadId', this.existingThreadId);
+    const threadId = this.config.threadId || this.existingThreadId;
+    if (threadId) {
+      wsParams.set('threadId', threadId);
     }
     const paramStr = wsParams.toString();
     if (paramStr) wsUrl += `?${paramStr}`;
