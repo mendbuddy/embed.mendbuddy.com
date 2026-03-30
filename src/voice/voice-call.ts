@@ -130,6 +130,7 @@ export class VoiceCall {
     // Start ringing if enabled
     if (this.config.ringEnabled) {
       this.isRinging = true;
+      this.greetingInProgress = true; // Block ALL state changes from server messages
       this.ringStartTime = Date.now();
       this.audioBuffer = [];
       this.readyReceived = false;
@@ -274,9 +275,11 @@ export class VoiceCall {
 
     switch (msg.type) {
       case 'ready':
-        if (!this.greetingInProgress) {
-          this.callbacks.onStateChange('ready');
+        if (this.greetingInProgress) {
+          this.readyReceived = true;
+          break; // Mic wiring handled by finishRinging
         }
+        this.callbacks.onStateChange('ready');
         this.startMicCapture().catch((err) => {
           console.error('[VoiceCall] Mic capture failed:', err);
           this.callbacks.onError('Microphone access failed');
@@ -286,9 +289,12 @@ export class VoiceCall {
 
       case 'audio':
         this.isSpeaking = true;
-        if (!this.greetingInProgress) {
-          this.callbacks.onStateChange('speaking');
+        if (this.greetingInProgress) {
+          // Buffer audio during connecting→connected→speaking transition
+          this.audioBuffer.push(msg.data);
+          break;
         }
+        this.callbacks.onStateChange('speaking');
         this.playAudio(msg.data);
         break;
 
