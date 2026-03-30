@@ -389,7 +389,6 @@ export class VoiceCall {
       if (e.data.type === 'volume') {
         this.callbacks.onMicVolume(Math.min(1, e.data.level * 5));
       } else if (e.data.type === 'audio' && this.ws && this.ws.readyState === WebSocket.OPEN && !this.ended) {
-        if (this.isSpeaking) return; // Echo suppression
         const bytes = new Uint8Array(e.data.pcm.buffer);
         let binary = '';
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
