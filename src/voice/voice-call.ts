@@ -42,6 +42,7 @@ export class VoiceCall {
   private mediaStream: MediaStream | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private scheduledTime = 0;
+  private activeSources: AudioBufferSourceNode[] = [];
 
   private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
   private wakeLock: any = null;
@@ -405,6 +406,11 @@ export class VoiceCall {
 
   // ─── Audio playback ─────────────────────────────────────────────────
   private stopPlayback(): void {
+    // Stop all scheduled audio sources immediately
+    for (const src of this.activeSources) {
+      try { src.stop(); } catch {}
+    }
+    this.activeSources = [];
     if (this.playbackContext) {
       this.scheduledTime = this.playbackContext.currentTime;
       this.callbacks.onPlaybackVolume(0);
@@ -451,6 +457,11 @@ export class VoiceCall {
     const startAt = Math.max(now, this.scheduledTime);
     source.start(startAt);
     this.scheduledTime = startAt + buffer.duration;
+
+    this.activeSources.push(source);
+    source.onended = () => {
+      this.activeSources = this.activeSources.filter(s => s !== source);
+    };
   }
 
   // ─── Mute/unmute ────────────────────────────────────────────────────
