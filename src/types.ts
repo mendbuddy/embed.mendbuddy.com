@@ -144,4 +144,5 @@ export interface UseChatReturn extends ChatState {
   clearError: () => void;
   resetSession: () => void;
   reloadHistory: () => Promise<void>;
+  addVoiceMessage: (role: 'user' | 'assistant', content: string) => void;
 }

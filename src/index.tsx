@@ -772,6 +772,18 @@ function getStyles(): string {
       padding: 24px 16px;
       gap: 16px;
       overflow-y: auto;
+      animation: mb-overlay-in 0.2s ease;
+    }
+    .mb-voice-overlay-out {
+      animation: mb-overlay-out 0.3s ease forwards;
+    }
+    @keyframes mb-overlay-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes mb-overlay-out {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(20px); }
     }
     .mb-voice-active {
       justify-content: flex-start;

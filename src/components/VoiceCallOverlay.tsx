@@ -20,6 +20,7 @@ interface VoiceCallOverlayProps {
   onMuteToggle: () => void;
   onHangUp: () => void;
   isMobile: boolean;
+  dismissing?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -104,6 +105,7 @@ export function VoiceCallOverlay({
   onMuteToggle,
   onHangUp,
   isMobile,
+  dismissing = false,
 }: VoiceCallOverlayProps) {
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,7 +136,7 @@ export function VoiceCallOverlay({
   // Confirmation dialog
   if (state === 'confirming') {
     return (
-      <div class="mb-voice-overlay">
+      <div class={`mb-voice-overlay${dismissing ? ' mb-voice-overlay-out' : ''}`}>
         <div class="mb-voice-confirm">
           <PhoneIcon size={40} />
           <h3>Start a voice conversation with {assistantName}?</h3>
@@ -155,7 +157,7 @@ export function VoiceCallOverlay({
   // Minutes exhausted
   if (state === 'exhausted') {
     return (
-      <div class="mb-voice-overlay">
+      <div class={`mb-voice-overlay${dismissing ? ' mb-voice-overlay-out' : ''}`}>
         <div class="mb-voice-confirm">
           <PhoneIcon size={40} />
           <h3>Voice calling unavailable</h3>
@@ -171,7 +173,7 @@ export function VoiceCallOverlay({
   // Error state
   if (state === 'error') {
     return (
-      <div class="mb-voice-overlay">
+      <div class={`mb-voice-overlay${dismissing ? ' mb-voice-overlay-out' : ''}`}>
         <div class="mb-voice-confirm">
           <h3>Call ended</h3>
           <p>The connection was lost. Please try again.</p>
@@ -192,7 +194,7 @@ export function VoiceCallOverlay({
       return () => clearTimeout(t);
     }, []);
     return (
-      <div class="mb-voice-overlay">
+      <div class={`mb-voice-overlay${dismissing ? ' mb-voice-overlay-out' : ''}`}>
         <div class="mb-voice-confirm">
           <h3>Call ended</h3>
           <p>Duration: {formatDuration(duration)}</p>
@@ -212,7 +214,7 @@ export function VoiceCallOverlay({
   }[state] || '';
 
   return (
-    <div class="mb-voice-overlay mb-voice-active">
+    <div class={`mb-voice-overlay mb-voice-active${dismissing ? ' mb-voice-overlay-out' : ''}`}>
       <StatusRing
         state={state}
         micVolume={micVolume}

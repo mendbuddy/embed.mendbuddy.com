@@ -22,6 +22,7 @@ interface ChatWindowProps {
   voicePlaybackVolume?: number;
   voiceMuted?: boolean;
   voiceTranscript?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  voiceDismissing?: boolean;
   isMobile?: boolean;
   onVoiceCallStart?: () => void;
   onVoiceConfirm?: () => void;
@@ -48,6 +49,7 @@ export function ChatWindow({
   voicePlaybackVolume = 0,
   voiceMuted = false,
   voiceTranscript = [],
+  voiceDismissing = false,
   isMobile = false,
   onVoiceCallStart,
   onVoiceConfirm,
@@ -98,9 +100,10 @@ export function ChatWindow({
         onVoiceCall={onVoiceCallStart}
       />
 
-      {voiceState !== 'idle' && onVoiceConfirm && onVoiceCancel && onVoiceMuteToggle && onVoiceHangUp ? (
+      {(voiceState !== 'idle' || voiceDismissing) && onVoiceConfirm && onVoiceCancel && onVoiceMuteToggle && onVoiceHangUp ? (
         <VoiceCallOverlay
           state={voiceState}
+          dismissing={voiceDismissing}
           assistantName={config.assistant_name || 'AI Assistant'}
           primaryColor={config.voice_accent_color || config.primary_color}
           micVolume={voiceMicVolume}

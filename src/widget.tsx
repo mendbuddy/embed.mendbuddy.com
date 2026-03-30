@@ -262,7 +262,24 @@ export function Widget({
     setVoiceState('confirming');
   }, []);
 
+  const [voiceDismissing, setVoiceDismissing] = useState(false);
+
   const handleVoiceCancel = useCallback(() => {
+    // If call ended/errored, animate out then reset
+    if (voiceState === 'ended' || voiceState === 'error' || voiceState === 'exhausted') {
+      setVoiceDismissing(true);
+      setTimeout(() => {
+        setVoiceDismissing(false);
+        setVoiceState('idle');
+        setVoiceTranscript([]);
+        setVoiceMicVolume(0);
+        setVoicePlaybackVolume(0);
+        setVoiceMuted(false);
+        voiceCallRef.current = null;
+      }, 300); // matches mb-overlay-out animation
+      return;
+    }
+    // Otherwise reset immediately (confirming dialog cancel)
     setVoiceState('idle');
     setVoiceTranscript([]);
     setVoiceMicVolume(0);
@@ -295,7 +312,6 @@ export function Widget({
         onTranscript: (role: 'user' | 'assistant', text: string, partial?: boolean) => {
           setVoiceTranscript((prev) => {
             if (partial) {
-              // Update last entry for this role or add new
               const lastIdx = prev.length - 1;
               if (lastIdx >= 0 && prev[lastIdx].role === role) {
                 const updated = [...prev];
@@ -304,7 +320,7 @@ export function Widget({
               }
               return [...prev, { role, text }];
             }
-            // Final transcript — ensure it's in the list
+            // Final transcript — add to voice overlay display
             const lastIdx = prev.length - 1;
             if (lastIdx >= 0 && prev[lastIdx].role === role) {
               const updated = [...prev];
@@ -313,6 +329,11 @@ export function Widget({
             }
             return [...prev, { role, text }];
           });
+
+          // Final transcripts get injected into chat messages behind the overlay
+          if (!partial && text.trim()) {
+            chat.addVoiceMessage(role, text.trim());
+          }
         },
         onMicVolume: (level: number) => setVoiceMicVolume(level),
         onPlaybackVolume: (level: number) => setVoicePlaybackVolume(level),
@@ -320,9 +341,7 @@ export function Widget({
           console.error('[MendBuddy Voice]', message);
           setVoiceState('error');
         },
-        onEnd: () => {
-          chat.reloadHistory();
-        },
+        onEnd: () => {},
       }, existingThreadId);
 
       voiceCallRef.current = call;
@@ -399,6 +418,7 @@ export function Widget({
         voicePlaybackVolume={voicePlaybackVolume}
         voiceMuted={voiceMuted}
         voiceTranscript={voiceTranscript}
+        voiceDismissing={voiceDismissing}
         isMobile={isMobile}
         onVoiceCallStart={handleVoiceCallStart}
         onVoiceConfirm={handleVoiceConfirm}

@@ -376,6 +376,20 @@ export function useChat(
   }, [embedId]);
 
   /**
+   * Add a voice message to the chat (injected in real-time during voice call).
+   * These appear behind the voice overlay and become visible when the call ends.
+   */
+  const addVoiceMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+    const msg: Message = {
+      id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role,
+      content,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
+  /**
    * Reload messages from server (used after voice call ends to show transcript in chat)
    */
   const reloadHistory = useCallback(async () => {
@@ -405,5 +419,6 @@ export function useChat(
     clearError,
     resetSession,
     reloadHistory,
+    addVoiceMessage,
   };
 }
