@@ -206,29 +206,48 @@ export class VoiceCall {
       this.ringTimer = null;
     }
 
-    // Lock state until first turn_complete — ALL state changes go through
-    // this flag so nothing can flicker to 'listening' during the greeting.
+    // Lock state until first turn_complete — ALL state changes from server
+    // messages are blocked so nothing can flicker during the greeting.
     this.greetingInProgress = true;
 
-    // Set speaking immediately and play buffered audio
-    this.isSpeaking = true;
-    this.callbacks.onStateChange('speaking');
+    // Snapshot buffered data before timeouts
+    const buffered = [...this.audioBuffer];
+    this.audioBuffer = [];
+    const micReady = this.readyReceived;
 
-    if (this.audioBuffer.length > 0) {
-      for (const b64 of this.audioBuffer) {
-        this.playAudio(b64);
-      }
-      this.audioBuffer = [];
-    }
+    // Ringing → Connecting (300ms) → Connected (500ms) → Speaking
+    this.callbacks.onStateChange('connecting');
 
-    // Wire up mic capture (muted by isSpeaking echo suppression)
-    if (this.readyReceived) {
-      this.startMicCapture().catch((err: any) => {
-        console.error('[VoiceCall] Mic capture failed:', err);
-        this.callbacks.onError('Microphone access failed');
-        this.disconnect('error');
-      });
-    }
+    setTimeout(() => {
+      if (this.ended) return;
+      this.callbacks.onStateChange('ready'); // "Connected"
+
+      setTimeout(() => {
+        if (this.ended) return;
+
+        this.isSpeaking = true;
+        this.callbacks.onStateChange('speaking');
+
+        // Play buffered greeting audio
+        for (const b64 of buffered) {
+          this.playAudio(b64);
+        }
+        // Also play any audio that arrived during the transition delays
+        for (const b64 of this.audioBuffer) {
+          this.playAudio(b64);
+        }
+        this.audioBuffer = [];
+
+        // Wire up mic capture (muted by isSpeaking echo suppression)
+        if (micReady) {
+          this.startMicCapture().catch((err: any) => {
+            console.error('[VoiceCall] Mic capture failed:', err);
+            this.callbacks.onError('Microphone access failed');
+            this.disconnect('error');
+          });
+        }
+      }, 500); // Connected → Speaking delay
+    }, 300); // Connecting → Connected delay
   }
 
   // ─── Handle messages from DO proxy ──────────────────────────────────
