@@ -122,9 +122,16 @@ export class VoiceCall {
     const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
     const wsBase = this.apiUrl.replace(/^https?/, wsProtocol);
     let wsUrl = `${wsBase}/embed/${this.embedId}/voice/ws`;
-    if (this.existingThreadId) {
-      wsUrl += `?threadId=${encodeURIComponent(this.existingThreadId)}`;
+    // Pass session token as query param (WebSocket can't send custom headers)
+    const wsParams = new URLSearchParams();
+    if (this.sessionToken) {
+      wsParams.set('session', this.sessionToken);
     }
+    if (this.existingThreadId) {
+      wsParams.set('threadId', this.existingThreadId);
+    }
+    const paramStr = wsParams.toString();
+    if (paramStr) wsUrl += `?${paramStr}`;
 
     this.ws = new WebSocket(wsUrl);
 
