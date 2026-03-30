@@ -375,6 +375,24 @@ export function useChat(
     setPreChatSubmitted(embedId, false);
   }, [embedId]);
 
+  /**
+   * Reload messages from server (used after voice call ends to show transcript in chat)
+   */
+  const reloadHistory = useCallback(async () => {
+    if (!clientRef.current || !hasExistingSession(embedId)) return;
+    try {
+      const result = await clientRef.current.getHistory();
+      if (result.messages.length > 0) {
+        setMessages(result.messages);
+        for (const m of result.messages) {
+          knownMessageIdsRef.current.add(m.id);
+        }
+      }
+    } catch (err) {
+      console.debug('Failed to reload history:', err);
+    }
+  }, [embedId]);
+
   return {
     messages,
     isLoading,
@@ -386,5 +404,6 @@ export function useChat(
     submitPreChat,
     clearError,
     resetSession,
+    reloadHistory,
   };
 }
