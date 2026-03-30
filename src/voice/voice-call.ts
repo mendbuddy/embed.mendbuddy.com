@@ -275,12 +275,16 @@ export class VoiceCall {
         break;
 
       case 'interrupted':
+        // Ignore during ringing/transition — greeting hasn't played yet
+        if (this.state === 'ringing' || this.state === 'connecting' || this.state === 'ready') break;
         this.isSpeaking = false;
         this.stopPlayback();
         this.setState('listening');
         break;
 
       case 'turn_complete':
+        // Ignore during ringing/transition — greeting audio is buffered, not played yet
+        if (this.state === 'ringing' || this.state === 'connecting' || this.state === 'ready') break;
         if (this.playbackContext && this.scheduledTime > this.playbackContext.currentTime) {
           const remaining = (this.scheduledTime - this.playbackContext.currentTime) * 1000;
           setTimeout(() => {
