@@ -195,10 +195,12 @@ export function Widget({
       }, 150);
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
+    // Use capture phase on document to catch scroll events on ANY element,
+    // not just window — many sites scroll on a container div, not the body.
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
 
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('scroll', onScroll, { capture: true } as EventListenerOptions);
       if (scrollTimer) clearTimeout(scrollTimer);
       if (bounceTimer) clearTimeout(bounceTimer);
     };
