@@ -357,7 +357,7 @@ export function Widget({
       console.error('[MendBuddy Voice] Error:', err);
       setVoiceState('error');
     }
-  }, [apiUrl, embedId]);
+  }, [apiUrl, embedId, chat.threadId, chat.addVoiceMessage]);
 
   const handleVoiceMuteToggle = useCallback(() => {
     if (!voiceCallRef.current) return;
