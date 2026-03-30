@@ -117,6 +117,16 @@ export class VoiceCall {
     this.requestWakeLock();
     this.setupVisibilityHandler();
 
+    // Request mic permission NOW while we're still in the user gesture.
+    // Browsers block getUserMedia from setTimeout/async callbacks.
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+
+    // Create playback context (must also be created in user gesture)
+    this.playbackContext = new AudioContext();
+    this.scheduledTime = this.playbackContext.currentTime;
+
     // Start ringing if enabled
     if (this.config.ringEnabled) {
       this.isRinging = true;
@@ -125,9 +135,8 @@ export class VoiceCall {
       this.readyReceived = false;
       this.callbacks.onStateChange('ringing');
 
-      // Create ring audio context and start ringtone
-      this.ringContext = new AudioContext();
-      this.stopRingtone = startRingtone(this.ringContext);
+      // Use the playback context for ringtone (avoid creating a second AudioContext)
+      this.stopRingtone = startRingtone(this.playbackContext);
 
       // Safety timer: if ring duration elapses with no audio, stop ringing anyway
       this.ringTimer = setTimeout(() => {
@@ -138,10 +147,6 @@ export class VoiceCall {
     } else {
       this.callbacks.onStateChange('connecting');
     }
-
-    // Create playback context (needed even during ringing for buffered audio)
-    this.playbackContext = new AudioContext();
-    this.scheduledTime = this.playbackContext.currentTime;
 
     // Connect WebSocket to our DO proxy
     const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
@@ -192,11 +197,9 @@ export class VoiceCall {
     if (!this.isRinging) return;
     this.isRinging = false;
 
-    // Stop ringtone
+    // Stop ringtone (plays on playbackContext, don't close it)
     this.stopRingtone?.();
     this.stopRingtone = null;
-    try { this.ringContext?.close(); } catch {}
-    this.ringContext = null;
 
     if (this.ringTimer) {
       clearTimeout(this.ringTimer);
@@ -215,9 +218,9 @@ export class VoiceCall {
       this.callbacks.onStateChange('listening');
     }
 
-    // Start mic capture if we received ready during ringing
+    // Wire up mic capture (mediaStream already obtained in connect())
     if (this.readyReceived) {
-      this.startMicCapture().catch((err) => {
+      this.wireMicCapture().catch((err) => {
         console.error('[VoiceCall] Mic capture failed:', err);
         this.callbacks.onError('Microphone access failed');
         this.disconnect('error');
@@ -309,10 +312,15 @@ export class VoiceCall {
   }
 
   // ─── Mic capture with AudioWorklet ───────────────────────────────────
+  // mediaStream is obtained in connect() during the user gesture.
+  // This method wires it to the AudioWorklet for capture.
   private async startMicCapture(): Promise<void> {
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
+    // Get mic if not already obtained (non-ringing path on older browsers)
+    if (!this.mediaStream) {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+    }
 
     this.captureContext = new AudioContext({ sampleRate: 16000 });
 
@@ -368,6 +376,9 @@ export class VoiceCall {
 
     this.callbacks.onStateChange('listening');
   }
+
+  // Alias used by finishRinging — same as startMicCapture since stream is pre-obtained
+  private wireMicCapture = this.startMicCapture;
 
   // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
   private stopPlayback(): void {
@@ -440,8 +451,6 @@ export class VoiceCall {
       this.isRinging = false;
       this.stopRingtone?.();
       this.stopRingtone = null;
-      try { this.ringContext?.close(); } catch {}
-      this.ringContext = null;
       if (this.ringTimer) {
         clearTimeout(this.ringTimer);
         this.ringTimer = null;
