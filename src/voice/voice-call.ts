@@ -12,6 +12,7 @@ interface VoiceCallConfig {
   companyName: string;
   ringEnabled: boolean;
   ringDuration: number;
+  ringCountry: string;
 }
 
 interface VoiceCallCallbacks {
@@ -100,6 +101,7 @@ export class VoiceCall {
         companyName: preData.companyName,
         ringEnabled: preData.ringEnabled ?? true,
         ringDuration: preData.ringDuration ?? 3,
+        ringCountry: preData.ringCountry || '',
       };
     } catch (err) {
       return { allowed: false, reason: 'network_error' };
@@ -136,7 +138,7 @@ export class VoiceCall {
       this.callbacks.onStateChange('ringing');
 
       // Use the playback context for ringtone (avoid creating a second AudioContext)
-      this.stopRingtone = startRingtone(this.playbackContext);
+      this.stopRingtone = startRingtone(this.playbackContext, this.config.ringCountry);
 
       // Safety timer: if ring duration elapses with no audio, stop ringing anyway
       this.ringTimer = setTimeout(() => {
