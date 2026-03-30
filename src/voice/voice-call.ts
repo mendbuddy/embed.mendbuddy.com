@@ -39,7 +39,6 @@ export class VoiceCall {
   private workletNode: AudioWorkletNode | null = null;
   private scheduledTime = 0;
 
-  private startTime = 0;
   private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
   private wakeLock: any = null;
   private ended = false;
@@ -48,7 +47,6 @@ export class VoiceCall {
   // Ringing state
   private isRinging = false;
   private ringStartTime = 0;
-  private ringContext: AudioContext | null = null;
   private stopRingtone: (() => void) | null = null;
   private audioBuffer: string[] = []; // Buffer server audio during ring
   private readyReceived = false;
@@ -107,13 +105,12 @@ export class VoiceCall {
       return { allowed: false, reason: 'network_error' };
     }
 
-    return { allowed: true, threadId: this.config.threadId };
+    return { allowed: true, threadId: this.config.threadId } as any;
   }
 
   async connect(): Promise<void> {
     if (!this.config) throw new Error('Call init() first');
 
-    this.startTime = Date.now();
     this.ended = false;
 
     this.requestWakeLock();
@@ -208,6 +205,9 @@ export class VoiceCall {
       this.ringTimer = null;
     }
 
+    // Transition to 'ready' ("Connected") — 'speaking' will follow when audio plays
+    this.callbacks.onStateChange('ready');
+
     // Play any buffered audio from the greeting
     if (this.audioBuffer.length > 0) {
       this.isSpeaking = true;
@@ -216,8 +216,6 @@ export class VoiceCall {
         this.playAudio(b64);
       }
       this.audioBuffer = [];
-    } else {
-      this.callbacks.onStateChange('listening');
     }
 
     // Wire up mic capture (mediaStream already obtained in connect())
