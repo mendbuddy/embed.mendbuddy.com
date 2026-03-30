@@ -187,6 +187,12 @@ export class VoiceCall {
         }
         break;
 
+      case 'interrupted':
+        this.isSpeaking = false;
+        this.stopPlayback();
+        this.callbacks.onStateChange('listening');
+        break;
+
       case 'turn_complete':
         this.isSpeaking = false;
         this.callbacks.onStateChange('listening');
@@ -264,6 +270,16 @@ export class VoiceCall {
   }
 
   // ─── Audio playback (24kHz PCM → browser sample rate) ────────────────
+  // Stop all scheduled audio playback (used on interruption)
+  private stopPlayback(): void {
+    if (this.playbackContext) {
+      // Reset scheduled time to now — any already-scheduled sources will finish
+      // but nothing new will be queued ahead
+      this.scheduledTime = this.playbackContext.currentTime;
+      this.callbacks.onPlaybackVolume(0);
+    }
+  }
+
   private playAudio(base64Data: string): void {
     if (!this.playbackContext) return;
 
